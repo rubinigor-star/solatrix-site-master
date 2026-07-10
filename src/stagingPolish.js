@@ -14,6 +14,7 @@ function enhance() {
   enhanceHeader();
   enhanceLeadForm();
   enhanceCrm();
+  removeRedundantHomepageSections();
 }
 
 function enhanceHeader() {
@@ -80,6 +81,20 @@ function enhanceCrm() {
   adminCard.querySelector('[data-stage-action="clear"]')?.addEventListener('click', () => { clearLeads(); location.reload(); });
   adminCard.querySelector('[data-stage-action="export"]')?.addEventListener('click', downloadCsv);
   adminCard.querySelectorAll('.leadsTable tbody tr').forEach((row) => row.setAttribute('tabindex', '0'));
+}
+
+function removeRedundantHomepageSections() {
+  if (location.pathname !== '/' && !location.pathname.endsWith('/solatrix-site-master/')) return;
+  const targetTexts = [
+    'הבעיה היא לא המערכת',
+    'כל גג נראה אחרת'
+  ];
+  document.querySelectorAll('section, main > div').forEach((element) => {
+    const text = element.textContent?.replace(/\s+/g, ' ').trim() || '';
+    if (targetTexts.some((target) => text.includes(target))) {
+      element.remove();
+    }
+  });
 }
 
 function openGlobalLeadForm() {
