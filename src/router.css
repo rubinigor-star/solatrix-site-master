@@ -48,6 +48,140 @@
   background: #fff8e8;
 }
 
+.whatsappReportCard {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid rgba(37,211,102,.25);
+  border-radius: 26px;
+  background: linear-gradient(145deg,#f3fff7,#fffdf8);
+  box-shadow: 0 18px 45px rgba(7,27,47,.08);
+}
+
+.whatsappReportIcon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: #e2f8ea;
+  color: #117440;
+  font-weight: 950;
+  letter-spacing: .04em;
+  margin-bottom: 14px;
+}
+
+.whatsappReportKicker {
+  display: block;
+  color: #147746;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.whatsappReportCopy h3 {
+  margin: 5px 0 8px;
+  color: #071b2f;
+  font-size: clamp(24px,3vw,34px);
+  line-height: 1.08;
+}
+
+.whatsappReportCopy p {
+  margin: 0;
+  color: #5e6b75;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.whatsappReportConsent {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 11px;
+  align-items: start;
+  margin: 20px 0 0;
+  padding: 15px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #dce9e1;
+  color: #2d3a42;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.whatsappReportConsent input {
+  width: 19px;
+  height: 19px;
+  margin-top: 2px;
+  accent-color: #25d366;
+}
+
+.whatsappReportButton {
+  width: 100%;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 18px;
+  padding: 15px 20px;
+  background: linear-gradient(135deg,#25d366,#55df82);
+  color: #07361f;
+  font-size: 17px;
+  font-weight: 950;
+  box-shadow: 0 14px 34px rgba(37,211,102,.22);
+}
+
+.whatsappReportButton:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.whatsappReportError {
+  margin: 13px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff0f0;
+  color: #a72c2c;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.whatsappReportSuccess {
+  margin-top: 14px;
+  padding: 15px;
+  border-radius: 16px;
+  background: #e9f8ef;
+  color: #17613c;
+  outline: none;
+}
+
+.whatsappReportSuccess b,
+.whatsappReportSuccess span {
+  display: block;
+}
+
+.whatsappReportSuccess span {
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.whatsappReportSuccess a {
+  display: inline-flex;
+  margin-top: 12px;
+  border-radius: 999px;
+  padding: 10px 15px;
+  background: #25d366;
+  color: white;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.stageFinePrint {
+  margin: 13px 0 0;
+  color: #7b7067;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .interactiveMap {
   cursor: crosshair;
   touch-action: manipulation;
@@ -89,6 +223,13 @@
   stroke: #2f7cff;
   stroke-width: 1.2;
   fill: rgba(47,124,255,.22);
+}
+
+@media (max-width: 720px) {
+  .whatsappReportCard {
+    padding: 18px;
+    border-radius: 22px;
+  }
 }
 
 @media (min-width: 980px) {
