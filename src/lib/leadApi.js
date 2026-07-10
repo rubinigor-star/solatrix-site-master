@@ -27,14 +27,8 @@ export function collectAttribution() {
   };
 
   const stored = readJson(FIRST_TOUCH_KEY);
-  if (!stored) {
-    localStorage.setItem(FIRST_TOUCH_KEY, JSON.stringify({ ...current, capturedAt: new Date().toISOString() }));
-  }
-
-  return {
-    firstTouch: stored || { ...current, capturedAt: new Date().toISOString() },
-    lastTouch: current
-  };
+  if (!stored) localStorage.setItem(FIRST_TOUCH_KEY, JSON.stringify({ ...current, capturedAt: new Date().toISOString() }));
+  return { firstTouch: stored || { ...current, capturedAt: new Date().toISOString() }, lastTouch: current };
 }
 
 export function normalizeLeadPayload(input = {}) {
@@ -63,6 +57,7 @@ export function normalizeLeadPayload(input = {}) {
     locale: document.documentElement.lang || 'he',
     attribution,
     reportData: input.reportData || input.report_data || null,
+    reportFile: input.reportFile || input.report_file || null,
     metadata: {
       ...(input.metadata || {}),
       userAgent: navigator.userAgent,
@@ -73,82 +68,32 @@ export function normalizeLeadPayload(input = {}) {
 
 export function validateLeadPayload(payload) {
   const errors = {};
-
   if (!payload.name || payload.name.length < 2) errors.name = 'נא להזין שם מלא.';
   if (!isValidIsraeliPhone(payload.phone)) errors.phone = 'נא להזין מספר טלפון תקין.';
   if (payload.email && !/^\S+@\S+\.\S+$/.test(payload.email)) errors.email = 'כתובת האימייל אינה תקינה.';
   if (!payload.consent) errors.consent = 'יש לאשר את העברת הפרטים כדי שנוכל לחזור אליכם.';
-
   return errors;
 }
 
 export async function submitLead(input = {}) {
   const payload = normalizeLeadPayload(input);
   const validationErrors = validateLeadPayload(payload);
-
-  if (Object.keys(validationErrors).length) {
-    throw new LeadSubmissionError('Please correct the highlighted fields.', 'validation_error', validationErrors);
-  }
-
-  if (payload.website) {
-    return { ok: true, ignored: true };
-  }
+  if (Object.keys(validationErrors).length) throw new LeadSubmissionError('Please correct the highlighted fields.', 'validation_error', validationErrors);
+  if (payload.website) return { ok: true, ignored: true };
 
   if (!isSupabaseConfigured()) {
     if (import.meta.env.DEV) return persistDevelopmentLead(payload);
-    throw new LeadSubmissionError(
-      'מערכת שליחת הפרטים עדיין אינה מחוברת. אפשר לפנות אלינו ב-WhatsApp.',
-      'backend_not_configured'
-    );
+    throw new LeadSubmissionError('מערכת שליחת הפרטים עדיין אינה מחוברת. אפשר לפנות אלינו ב-WhatsApp.', 'backend_not_configured');
   }
 
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.functions.invoke('submit-lead', {
-    body: payload
-  });
-
-  if (error) {
-    throw new LeadSubmissionError(
-      'לא הצלחנו לשלוח את הפרטים. נסו שוב או פנו אלינו ב-WhatsApp.',
-      'edge_function_error',
-      error
-    );
-  }
-
-  if (!data?.ok) {
-    throw new LeadSubmissionError(
-      data?.message || 'לא הצלחנו לשלוח את הפרטים.',
-      data?.code || 'lead_submission_failed',
-      data?.details || null
-    );
-  }
-
+  const { data, error } = await supabase.functions.invoke('submit-lead', { body: payload });
+  if (error) throw new LeadSubmissionError('לא הצלחנו לשלוח את הפרטים. נסו שוב או פנו אלינו ב-WhatsApp.', 'edge_function_error', error);
+  if (!data?.ok) throw new LeadSubmissionError(data?.message || 'לא הצלחנו לשלוח את הפרטים.', data?.code || 'lead_submission_failed', data?.details || null);
   return data;
 }
 
-function isValidIsraeliPhone(value = '') {
-  const digits = String(value).replace(/\D/g, '');
-  return /^(?:9725\d{8}|05\d{8})$/.test(digits);
-}
-
-function inferSourceType() {
-  if (/contact\.html/.test(window.location.pathname)) return 'contact-page';
-  if (/roof-check/.test(window.location.pathname)) return 'roof-check';
-  return 'site-form';
-}
-
-function persistDevelopmentLead(payload) {
-  const existing = readJson(DEVELOPMENT_LEADS_KEY) || [];
-  const next = [{ ...payload, developmentOnly: true }, ...existing].slice(0, 100);
-  localStorage.setItem(DEVELOPMENT_LEADS_KEY, JSON.stringify(next));
-  return Promise.resolve({ ok: true, leadId: payload.submissionId, developmentOnly: true });
-}
-
-function readJson(key) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : null;
-  } catch {
-    return null;
-  }
-}
+function isValidIsraeliPhone(value = '') { return /^(?:9725\d{8}|05\d{8})$/.test(String(value).replace(/\D/g, '')); }
+function inferSourceType() { if (/contact\.html/.test(window.location.pathname)) return 'contact-page'; if (/roof-check/.test(window.location.pathname)) return 'roof-check'; return 'site-form'; }
+function persistDevelopmentLead(payload) { const existing = readJson(DEVELOPMENT_LEADS_KEY) || []; localStorage.setItem(DEVELOPMENT_LEADS_KEY, JSON.stringify([{ ...payload, developmentOnly: true }, ...existing].slice(0, 100))); return Promise.resolve({ ok: true, leadId: payload.submissionId, developmentOnly: true }); }
+function readJson(key) { try { const value = localStorage.getItem(key); return value ? JSON.parse(value) : null; } catch { return null; } }
