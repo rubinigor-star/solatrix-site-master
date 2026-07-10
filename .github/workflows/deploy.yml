@@ -31,6 +31,9 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Strip unwanted homepage sections from built page
         run: |
@@ -90,20 +93,27 @@ jobs:
           print(f'Removed {len(ordered)} homepage section(s) from final artifact')
           PY
 
-      - name: Verify removed homepage sections
+      - name: Verify production pages
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          page = Path('dist/index.html').read_text(encoding='utf-8')
-          forbidden = [
-              'הבעיה היא לא המערכת',
-              'כל גג נראה אחרת',
+          required = [
+              Path('dist/index.html'),
+              Path('dist/contact.html'),
+              Path('dist/admin.html'),
+              Path('dist/roof-check/index.html'),
           ]
+          missing = [str(path) for path in required if not path.exists()]
+          if missing:
+              raise SystemExit(f'Missing production pages: {missing}')
+
+          page = Path('dist/index.html').read_text(encoding='utf-8')
+          forbidden = ['הבעיה היא לא המערכת', 'כל גג נראה אחרת']
           found = [text for text in forbidden if text in page]
           if found:
               raise SystemExit(f'Homepage cleanup failed; still found: {found}')
-          print('Verified: both unwanted homepage sections are absent from dist/index.html')
+          print('Verified production pages and homepage cleanup')
           PY
 
       - name: Copy beta pages

@@ -60,8 +60,8 @@ function enhanceLeadForm() {
   leadFields.querySelectorAll('[data-field], [data-stage-field]').forEach((input) => input.addEventListener('input', refreshWhatsAppLink));
   reportCard.querySelector('[data-stage-open-lead]')?.addEventListener('click', () => openGlobalLeadForm());
   pdfButton?.addEventListener('click', () => {
-    const draft = readDraft();
-    setTimeout(() => enrichLatestLead(draft), 250);
+    const latestDraft = readDraft();
+    setTimeout(() => enrichLatestLead(latestDraft), 250);
   }, true);
 }
 
@@ -85,15 +85,10 @@ function enhanceCrm() {
 
 function removeRedundantHomepageSections() {
   if (location.pathname !== '/' && !location.pathname.endsWith('/solatrix-site-master/')) return;
-  const targetTexts = [
-    'הבעיה היא לא המערכת',
-    'כל גג נראה אחרת'
-  ];
+  const targetTexts = ['הבעיה היא לא המערכת', 'כל גג נראה אחרת'];
   document.querySelectorAll('section, main > div').forEach((element) => {
     const text = element.textContent?.replace(/\s+/g, ' ').trim() || '';
-    if (targetTexts.some((target) => text.includes(target))) {
-      element.remove();
-    }
+    if (targetTexts.some((target) => text.includes(target))) element.remove();
   });
 }
 
@@ -102,12 +97,60 @@ function openGlobalLeadForm() {
   const name = document.querySelector('[data-field="leadName"]')?.value || '';
   const phone = document.querySelector('[data-field="leadPhone"]')?.value || '';
   const address = document.querySelector('[data-field="address"]')?.value || '';
+  const monthlyBill = document.querySelector('[data-field="monthlyBill"]')?.value || '';
+
   window.openSolatrixLeadForm?.({
     sourceType: 'roof-check',
     sourcePage: location.pathname,
     notes: draft.notes || '',
-    prefill: { name, phone, email: draft.email || '', cityOrAddress: address, message: draft.notes || '' }
+    cityOrAddress: address,
+    monthlyBill,
+    reportData: collectRoofCheckReportData(),
+    metadata: {
+      calculatorVersion: new URLSearchParams(location.search).get('v') || 'roof-check-master-v1'
+    },
+    prefill: {
+      name,
+      phone,
+      email: draft.email || '',
+      cityOrAddress: address,
+      monthlyBill,
+      message: draft.notes || ''
+    }
   });
+}
+
+function collectRoofCheckReportData() {
+  const reportCard = document.querySelector('.reportCard');
+  const metrics = {};
+
+  reportCard?.querySelectorAll('.resultsGrid > div, .reportHeroGraphic > div').forEach((node, index) => {
+    const label = node.querySelector('span')?.textContent?.replace(/\s+/g, ' ').trim() || `metric_${index + 1}`;
+    const value = node.querySelector('b, strong')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+    if (value) metrics[label] = value;
+  });
+
+  return {
+    reportType: 'roof-check',
+    calculation: metrics,
+    roofData: {
+      address: document.querySelector('[data-field="address"]')?.value || '',
+      monthlyBill: document.querySelector('[data-field="monthlyBill"]')?.value || '',
+      surfaces: Array.isArray(window.__solatrixRoofSurfaces) ? window.__solatrixRoofSurfaces : [],
+      obstacles: collectSelectedObstacles()
+    },
+    metadata: {
+      pageTitle: document.title,
+      calculatorVersion: new URLSearchParams(location.search).get('v') || 'roof-check-master-v1',
+      capturedAt: new Date().toISOString()
+    }
+  };
+}
+
+function collectSelectedObstacles() {
+  return [...document.querySelectorAll('.obstacle.selected')]
+    .map((node) => node.textContent?.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
 }
 
 function enrichLatestLead(draft) {
