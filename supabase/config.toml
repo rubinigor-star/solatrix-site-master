@@ -1,0 +1,4 @@
+project_id = "solatrix-site-master"
+
+[functions.submit-lead]
+verify_jwt = false
