@@ -1,0 +1,232 @@
+.reportCard [data-action="generatePdf"],
+.reportCard [data-request-whatsapp-report],
+.reportCard .whatsappReportCard,
+.reportCard .leadFields {
+  display: none !important;
+}
+
+.reportWhatsappOffer {
+  margin-top: 28px;
+  border-radius: 28px;
+  overflow: hidden;
+  border: 1px solid rgba(7,27,47,.12);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(245,161,26,.18), transparent 34%),
+    linear-gradient(145deg,#fffaf0,#ffffff);
+  box-shadow: 0 22px 55px rgba(7,27,47,.09);
+}
+
+.reportWhatsappIntro {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 24px;
+}
+
+.reportWhatsappBadge {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg,#173a59,#071b2f);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: .04em;
+  box-shadow: 0 14px 30px rgba(7,27,47,.18);
+}
+
+.reportWhatsappCopy span {
+  display: block;
+  color: #a96a05;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.reportWhatsappCopy h3 {
+  margin: 5px 0 7px;
+  color: #071b2f;
+  font-size: clamp(23px,3vw,32px);
+  line-height: 1.08;
+}
+
+.reportWhatsappCopy p {
+  margin: 0;
+  color: #5e6b75;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.reportWhatsappOpen,
+.reportWhatsappSubmit {
+  border: 0;
+  border-radius: 18px;
+  padding: 15px 22px;
+  font: inherit;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.reportWhatsappOpen {
+  min-width: 220px;
+  background: linear-gradient(135deg,#25d366,#62e28c);
+  color: #07361f;
+  box-shadow: 0 14px 34px rgba(37,211,102,.22);
+}
+
+.reportWhatsappForm {
+  display: none;
+  padding: 0 24px 24px;
+  border-top: 1px solid rgba(7,27,47,.08);
+}
+
+.reportWhatsappOffer.is-open .reportWhatsappForm {
+  display: block;
+  animation: reportFormReveal .22s ease-out;
+}
+
+.reportWhatsappOffer.is-open .reportWhatsappOpen {
+  display: none;
+}
+
+@keyframes reportFormReveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.reportWhatsappFormIntro {
+  margin: 18px 0 14px;
+  color: #465564;
+  font-weight: 750;
+}
+
+.reportWhatsappGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.reportWhatsappGrid label {
+  display: grid;
+  gap: 7px;
+  color: #24384a;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.reportWhatsappGrid input {
+  width: 100%;
+  border: 1px solid #dccbb4;
+  border-radius: 15px;
+  padding: 13px 14px;
+  background: #fff;
+  color: #071b2f;
+  font: inherit;
+  outline: none;
+}
+
+.reportWhatsappGrid input:focus {
+  border-color: #f5a11a;
+  box-shadow: 0 0 0 4px rgba(245,161,26,.14);
+}
+
+.reportWhatsappGrid .wide {
+  grid-column: 1/-1;
+}
+
+.reportWhatsappConsent {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 11px;
+  align-items: start;
+  margin: 16px 0 0;
+  padding: 14px;
+  border-radius: 16px;
+  background: #f6fbf8;
+  border: 1px solid #dce9e1;
+  color: #2d3a42;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.reportWhatsappConsent input {
+  width: 19px;
+  height: 19px;
+  margin-top: 2px;
+  accent-color: #25d366;
+}
+
+.reportWhatsappSubmit {
+  width: 100%;
+  margin-top: 14px;
+  background: linear-gradient(135deg,#f5a11a,#ffc45f);
+  color: #211506;
+  box-shadow: 0 14px 34px rgba(245,161,26,.22);
+}
+
+.reportWhatsappSubmit:disabled {
+  opacity: .62;
+  cursor: wait;
+}
+
+.reportWhatsappError,
+.reportWhatsappSuccess {
+  margin: 13px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.reportWhatsappError {
+  background: #fff0f0;
+  color: #a72c2c;
+}
+
+.reportWhatsappSuccess {
+  background: #e9f8ef;
+  color: #17613c;
+}
+
+.reportWhatsappFinePrint {
+  margin: 10px 0 0;
+  color: #7b7067;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .reportWhatsappIntro {
+    grid-template-columns: 58px 1fr;
+    padding: 18px;
+  }
+
+  .reportWhatsappBadge {
+    width: 58px;
+    height: 58px;
+    border-radius: 18px;
+  }
+
+  .reportWhatsappOpen {
+    grid-column: 1/-1;
+    width: 100%;
+  }
+
+  .reportWhatsappForm {
+    padding: 0 18px 18px;
+  }
+
+  .reportWhatsappGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .reportWhatsappGrid .wide {
+    grid-column: auto;
+  }
+}
