@@ -32,6 +32,64 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Strip unwanted homepage sections from built page
+        run: |
+          python - <<'PY'
+          from html import unescape
+          from pathlib import Path
+          import re
+
+          path = Path('dist/index.html')
+          html = path.read_text(encoding='utf-8')
+
+          tag_pattern = re.compile(r'</?section\b[^>]*>', re.I)
+          stack = []
+          spans = []
+
+          for match in tag_pattern.finditer(html):
+              tag = match.group(0)
+              if re.match(r'<\/section', tag, re.I):
+                  if not stack:
+                      continue
+                  start, open_tag = stack.pop()
+                  spans.append((start, match.end(), open_tag))
+              else:
+                  stack.append((match.start(), tag))
+
+          def visible_text(fragment):
+              fragment = re.sub(r'<script\b[^>]*>[\s\S]*?<\/script>', ' ', fragment, flags=re.I)
+              fragment = re.sub(r'<style\b[^>]*>[\s\S]*?<\/style>', ' ', fragment, flags=re.I)
+              fragment = re.sub(r'<[^>]+>', ' ', fragment)
+              return re.sub(r'\s+', ' ', unescape(fragment)).strip()
+
+          targets = ['הבעיה היא לא המערכת', 'כל גג נראה אחרת']
+          removals = []
+
+          decision_candidates = [
+              span for span in spans
+              if re.search(r'\bid\s*=\s*["\']decision["\']', span[2], re.I)
+          ]
+          if decision_candidates:
+              removals.append(min(decision_candidates, key=lambda span: span[1] - span[0]))
+
+          for target in targets:
+              candidates = [
+                  span for span in spans
+                  if target in visible_text(html[span[0]:span[1]])
+              ]
+              if candidates:
+                  removals.append(min(candidates, key=lambda span: span[1] - span[0]))
+
+          unique = {(start, end): (start, end, open_tag) for start, end, open_tag in removals}
+          ordered = sorted(unique.values(), key=lambda span: span[0], reverse=True)
+
+          for start, end, _ in ordered:
+              html = html[:start] + html[end:]
+
+          path.write_text(html, encoding='utf-8')
+          print(f'Removed {len(ordered)} homepage section(s) from final artifact')
+          PY
+
       - name: Verify removed homepage sections
         run: |
           python - <<'PY'
