@@ -128,7 +128,8 @@ export default defineConfig({
         business: 'business.html',
         agriculture: 'agriculture.html',
         faq: 'faq.html',
-        contact: 'contact.html'
+        contact: 'contact.html',
+        admin: 'admin.html'
       }
     }
   }
