@@ -76,7 +76,9 @@ function stripUnwantedHomepageSections(html) {
 }
 
 function isHomepageFile(filename) {
-  return filename.endsWith('/index.html') && !filename.endsWith('/roof-check/index.html');
+  const normalized = filename.replace(/^\.\//, '');
+  return normalized === 'index.html'
+    || (normalized.endsWith('/index.html') && !normalized.endsWith('/roof-check/index.html'));
 }
 
 function injectSolatrixScripts() {
