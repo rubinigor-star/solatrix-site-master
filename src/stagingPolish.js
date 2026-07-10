@@ -1,4 +1,4 @@
-import { clearLeads, exportLeadsCsv, getLeads, saveLead, seedDemoLeads } from './leadsStore.js';
+import { clearLeads, exportLeadsCsv, seedDemoLeads } from './leadsStore.js';
 import { LeadSubmissionError, submitLead } from './lib/leadApi.js';
 import { formatPublicLeadReference } from './lib/publicReference.js';
 
@@ -50,26 +50,37 @@ function enhanceLeadForm() {
     <input type="email" placeholder="אימייל (לא חובה)" value="${escapeAttr(draft.email || '')}" data-stage-field="email" autocomplete="email" />
   `);
 
-  const pdfButton = reportCard.querySelector('[data-action="generatePdf"]');
-  if (!pdfButton) return;
-  pdfButton.hidden = true;
+  const originalPdfButton = reportCard.querySelector('[data-action="generatePdf"]');
+  if (!originalPdfButton) return;
 
-  pdfButton.insertAdjacentHTML('afterend', `
-    <section class="whatsappReportCard" data-whatsapp-report-card>
-      <div class="whatsappReportIcon">PDF</div>
+  // Keep the original button and its click handler only as an internal PDF generator.
+  // The visible clone preserves the old design but first saves the lead and consent.
+  originalPdfButton.hidden = true;
+  originalPdfButton.setAttribute('aria-hidden', 'true');
+  originalPdfButton.tabIndex = -1;
+
+  const requestButton = originalPdfButton.cloneNode(true);
+  requestButton.hidden = false;
+  requestButton.removeAttribute('aria-hidden');
+  requestButton.removeAttribute('data-action');
+  requestButton.removeAttribute('tabindex');
+  requestButton.type = 'button';
+  requestButton.setAttribute('data-request-whatsapp-report', 'true');
+  requestButton.innerHTML = '<span data-report-button-label>קבלת דוח PDF מלא ב-WhatsApp</span>';
+  originalPdfButton.insertAdjacentElement('afterend', requestButton);
+
+  requestButton.insertAdjacentHTML('afterend', `
+    <section class="whatsappReportCard whatsappReportCardCompact" data-whatsapp-report-card>
       <div class="whatsappReportCopy">
-        <span class="whatsappReportKicker">הדוח המלא שלכם</span>
-        <h3>רוצים לקבל את דוח ה-PDF ל-WhatsApp?</h3>
-        <p>נשמור את תוצאות הבדיקה, נכין את הדוח ונעביר אותו למספר שהזנתם.</p>
+        <span class="whatsappReportKicker">שליחת הדוח</span>
+        <h3>קבלת הדוח המלא ב-WhatsApp</h3>
+        <p>לאחר אישור הבקשה נשמור את תוצאות הבדיקה ונכין את הדוח המלא למספר שהזנתם.</p>
       </div>
       <label class="whatsappReportConsent">
         <input type="checkbox" data-report-consent />
         <span>אני מבקש/ת לקבל את דוח ה-PDF ב-WhatsApp ומאשר/ת לנציג Solatrix Energy ליצור איתי קשר בנוגע לבדיקה ולהצעה.</span>
       </label>
       <p class="whatsappReportError" data-report-error hidden></p>
-      <button class="whatsappReportButton" type="button" data-request-whatsapp-report>
-        <span data-report-button-label>קבלת הדוח ב-WhatsApp</span>
-      </button>
       <div class="whatsappReportSuccess" data-report-success hidden tabindex="-1"></div>
       <p class="stageFinePrint">הדוח הוא הערכה דיגיטלית ראשונית. הצעה סופית כפופה לבדיקת שטח, חשמל וקונסטרוקציה.</p>
     </section>
@@ -85,18 +96,17 @@ function enhanceLeadForm() {
   };
 
   leadFields.querySelectorAll('[data-field], [data-stage-field]').forEach((input) => input.addEventListener('input', syncDraft));
-  reportCard.querySelector('[data-request-whatsapp-report]')?.addEventListener('click', () => requestWhatsappReport(reportCard, pdfButton));
+  requestButton.addEventListener('click', () => requestWhatsappReport(reportCard, originalPdfButton, requestButton));
 }
 
-async function requestWhatsappReport(reportCard, pdfButton) {
+async function requestWhatsappReport(reportCard, originalPdfButton, requestButton) {
   const name = reportCard.querySelector('[data-field="leadName"]')?.value?.trim() || '';
   const phone = reportCard.querySelector('[data-field="leadPhone"]')?.value?.trim() || '';
   const email = reportCard.querySelector('[data-stage-field="email"]')?.value?.trim() || '';
   const consent = reportCard.querySelector('[data-report-consent]')?.checked === true;
   const errorNode = reportCard.querySelector('[data-report-error]');
   const successNode = reportCard.querySelector('[data-report-success]');
-  const button = reportCard.querySelector('[data-request-whatsapp-report]');
-  const label = button?.querySelector('[data-report-button-label]');
+  const label = requestButton?.querySelector('[data-report-button-label]');
 
   errorNode.hidden = true;
   successNode.hidden = true;
@@ -112,7 +122,7 @@ async function requestWhatsappReport(reportCard, pdfButton) {
     return;
   }
 
-  button.disabled = true;
+  requestButton.disabled = true;
   label.textContent = 'מכינים את הדוח...';
   const reportData = collectRoofCheckReportData();
   reportData.metadata = {
@@ -143,8 +153,8 @@ async function requestWhatsappReport(reportCard, pdfButton) {
       }
     });
 
-    syncReportDraft(name, phone, email);
-    pdfButton.click();
+    writeDraft({ ...readDraft(), name, phone, email });
+    originalPdfButton.click();
 
     const publicReference = formatPublicLeadReference(result.leadNumber);
     successNode.innerHTML = `
@@ -160,8 +170,8 @@ async function requestWhatsappReport(reportCard, pdfButton) {
       : 'לא הצלחנו לשמור את הבקשה. נסו שוב או פנו אלינו ב-WhatsApp.';
     errorNode.hidden = false;
   } finally {
-    button.disabled = false;
-    label.textContent = 'קבלת הדוח ב-WhatsApp';
+    requestButton.disabled = false;
+    label.textContent = 'קבלת דוח PDF מלא ב-WhatsApp';
   }
 }
 
@@ -223,10 +233,6 @@ function collectSelectedObstacles() {
   return [...document.querySelectorAll('.obstacle.selected')]
     .map((node) => node.textContent?.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
-}
-
-function syncReportDraft(name, phone, email) {
-  writeDraft({ ...readDraft(), name, phone, email });
 }
 
 function buildWhatsappFallbackUrl(reference) {
