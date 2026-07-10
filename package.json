@@ -11,6 +11,8 @@
   "dependencies": {
     "@supabase/supabase-js": "latest",
     "@vitejs/plugin-react": "latest",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.2",
     "vite": "latest",
     "react": "latest",
     "react-dom": "latest",
