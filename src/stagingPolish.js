@@ -1,4 +1,6 @@
 import { clearLeads, exportLeadsCsv, getLeads, saveLead, seedDemoLeads } from './leadsStore.js';
+import { LeadSubmissionError, submitLead } from './lib/leadApi.js';
+import { formatPublicLeadReference } from './lib/publicReference.js';
 
 const DRAFT_KEY = 'solatrix_roof_check_lead_draft';
 const MAIN_SITE_LINKS = [
@@ -35,34 +37,132 @@ function enhanceHeader() {
 function enhanceLeadForm() {
   const reportCard = document.querySelector('.reportCard');
   const leadFields = reportCard?.querySelector('.leadFields');
-  if (!leadFields || leadFields.dataset.stagePolished) return;
+  if (!reportCard || !leadFields || leadFields.dataset.stagePolished) return;
   leadFields.dataset.stagePolished = 'true';
+
   const draft = readDraft();
+  const nameInput = leadFields.querySelector('[data-field="leadName"]');
+  const phoneInput = leadFields.querySelector('[data-field="leadPhone"]');
+  if (nameInput) nameInput.value = nameInput.value || draft.name || '';
+  if (phoneInput) phoneInput.value = phoneInput.value || draft.phone || '';
+
   leadFields.insertAdjacentHTML('beforeend', `
-    <input placeholder="אימייל" value="${escapeAttr(draft.email || '')}" data-stage-field="email" />
-    <input placeholder="הערות / זמן נוח לשיחה" value="${escapeAttr(draft.notes || '')}" data-stage-field="notes" />
+    <input type="email" placeholder="אימייל (לא חובה)" value="${escapeAttr(draft.email || '')}" data-stage-field="email" autocomplete="email" />
   `);
+
   const pdfButton = reportCard.querySelector('[data-action="generatePdf"]');
-  pdfButton?.insertAdjacentHTML('afterend', `
-    <div class="stageReportActions">
-      <button class="ghostBtn" type="button" data-stage-open-lead>השאירו פרטים</button>
-      <a class="ghostBtn stageWhatsapp" target="_blank" rel="noreferrer">WhatsApp</a>
-    </div>
-    <p class="stageFinePrint">הדוח הוא הערכה דיגיטלית ראשונית. לפני הצעה סופית נבצע בדיקת שטח, חשמל וקונסטרוקציה.</p>
+  if (!pdfButton) return;
+  pdfButton.hidden = true;
+
+  pdfButton.insertAdjacentHTML('afterend', `
+    <section class="whatsappReportCard" data-whatsapp-report-card>
+      <div class="whatsappReportIcon">PDF</div>
+      <div class="whatsappReportCopy">
+        <span class="whatsappReportKicker">הדוח המלא שלכם</span>
+        <h3>רוצים לקבל את דוח ה-PDF ל-WhatsApp?</h3>
+        <p>נשמור את תוצאות הבדיקה, נכין את הדוח ונעביר אותו למספר שהזנתם.</p>
+      </div>
+      <label class="whatsappReportConsent">
+        <input type="checkbox" data-report-consent />
+        <span>אני מבקש/ת לקבל את דוח ה-PDF ב-WhatsApp ומאשר/ת לנציג Solatrix Energy ליצור איתי קשר בנוגע לבדיקה ולהצעה.</span>
+      </label>
+      <p class="whatsappReportError" data-report-error hidden></p>
+      <button class="whatsappReportButton" type="button" data-request-whatsapp-report>
+        <span data-report-button-label>קבלת הדוח ב-WhatsApp</span>
+      </button>
+      <div class="whatsappReportSuccess" data-report-success hidden tabindex="-1"></div>
+      <p class="stageFinePrint">הדוח הוא הערכה דיגיטלית ראשונית. הצעה סופית כפופה לבדיקת שטח, חשמל וקונסטרוקציה.</p>
+    </section>
   `);
-  refreshWhatsAppLink();
-  leadFields.querySelectorAll('[data-stage-field]').forEach((input) => input.addEventListener('input', () => {
-    const nextDraft = readDraft();
-    nextDraft[input.dataset.stageField] = input.value;
-    writeDraft(nextDraft);
-    refreshWhatsAppLink();
-  }));
-  leadFields.querySelectorAll('[data-field], [data-stage-field]').forEach((input) => input.addEventListener('input', refreshWhatsAppLink));
-  reportCard.querySelector('[data-stage-open-lead]')?.addEventListener('click', () => openGlobalLeadForm());
-  pdfButton?.addEventListener('click', () => {
-    const latestDraft = readDraft();
-    setTimeout(() => enrichLatestLead(latestDraft), 250);
-  }, true);
+
+  const syncDraft = () => {
+    writeDraft({
+      ...readDraft(),
+      name: nameInput?.value || '',
+      phone: phoneInput?.value || '',
+      email: leadFields.querySelector('[data-stage-field="email"]')?.value || ''
+    });
+  };
+
+  leadFields.querySelectorAll('[data-field], [data-stage-field]').forEach((input) => input.addEventListener('input', syncDraft));
+  reportCard.querySelector('[data-request-whatsapp-report]')?.addEventListener('click', () => requestWhatsappReport(reportCard, pdfButton));
+}
+
+async function requestWhatsappReport(reportCard, pdfButton) {
+  const name = reportCard.querySelector('[data-field="leadName"]')?.value?.trim() || '';
+  const phone = reportCard.querySelector('[data-field="leadPhone"]')?.value?.trim() || '';
+  const email = reportCard.querySelector('[data-stage-field="email"]')?.value?.trim() || '';
+  const consent = reportCard.querySelector('[data-report-consent]')?.checked === true;
+  const errorNode = reportCard.querySelector('[data-report-error]');
+  const successNode = reportCard.querySelector('[data-report-success]');
+  const button = reportCard.querySelector('[data-request-whatsapp-report]');
+  const label = button?.querySelector('[data-report-button-label]');
+
+  errorNode.hidden = true;
+  successNode.hidden = true;
+
+  const errors = [];
+  if (name.length < 2) errors.push('נא להזין שם מלא.');
+  if (!/^(?:9725\d{8}|05\d{8})$/.test(phone.replace(/\D/g, ''))) errors.push('נא להזין מספר WhatsApp תקין.');
+  if (!consent) errors.push('כדי לקבל את הדוח יש לאשר את הבקשה ואת יצירת הקשר.');
+
+  if (errors.length) {
+    errorNode.textContent = errors.join(' ');
+    errorNode.hidden = false;
+    return;
+  }
+
+  button.disabled = true;
+  label.textContent = 'מכינים את הדוח...';
+  const reportData = collectRoofCheckReportData();
+  reportData.metadata = {
+    ...reportData.metadata,
+    deliveryRequested: true,
+    deliveryChannel: 'whatsapp',
+    deliveryStatus: 'pending_whatsapp_connection',
+    recipientPhone: normalizePhone(phone),
+    consentTextVersion: 'whatsapp-report-v1',
+    consentAt: new Date().toISOString()
+  };
+
+  try {
+    const result = await submitLead({
+      name,
+      phone,
+      email,
+      consent: true,
+      sourceType: 'roof-check-whatsapp-report',
+      sourcePage: location.pathname,
+      cityOrAddress: document.querySelector('[data-field="address"]')?.value || '',
+      monthlyBill: document.querySelector('[data-field="monthlyBill"]')?.value || '',
+      message: 'הלקוח ביקש לקבל את דוח ה-PDF ב-WhatsApp ואישר יצירת קשר.',
+      reportData,
+      metadata: {
+        whatsappReportRequested: true,
+        recipientPhone: normalizePhone(phone)
+      }
+    });
+
+    syncReportDraft(name, phone, email);
+    pdfButton.click();
+
+    const publicReference = formatPublicLeadReference(result.leadNumber);
+    successNode.innerHTML = `
+      <b>הבקשה התקבלה${publicReference ? ` — מספר פנייה ${publicReference}` : ''}.</b>
+      <span>הדוח נפתח עכשיו לצפייה. שמרנו גם בקשה למסירה ב-WhatsApp.</span>
+      <a href="${buildWhatsappFallbackUrl(publicReference)}" target="_blank" rel="noreferrer">פתיחת WhatsApp לאישור הבקשה</a>
+    `;
+    successNode.hidden = false;
+    successNode.focus();
+  } catch (error) {
+    errorNode.textContent = error instanceof LeadSubmissionError
+      ? error.message
+      : 'לא הצלחנו לשמור את הבקשה. נסו שוב או פנו אלינו ב-WhatsApp.';
+    errorNode.hidden = false;
+  } finally {
+    button.disabled = false;
+    label.textContent = 'קבלת הדוח ב-WhatsApp';
+  }
 }
 
 function enhanceCrm() {
@@ -89,34 +189,6 @@ function removeRedundantHomepageSections() {
   document.querySelectorAll('section, main > div').forEach((element) => {
     const text = element.textContent?.replace(/\s+/g, ' ').trim() || '';
     if (targetTexts.some((target) => text.includes(target))) element.remove();
-  });
-}
-
-function openGlobalLeadForm() {
-  const draft = readDraft();
-  const name = document.querySelector('[data-field="leadName"]')?.value || '';
-  const phone = document.querySelector('[data-field="leadPhone"]')?.value || '';
-  const address = document.querySelector('[data-field="address"]')?.value || '';
-  const monthlyBill = document.querySelector('[data-field="monthlyBill"]')?.value || '';
-
-  window.openSolatrixLeadForm?.({
-    sourceType: 'roof-check',
-    sourcePage: location.pathname,
-    notes: draft.notes || '',
-    cityOrAddress: address,
-    monthlyBill,
-    reportData: collectRoofCheckReportData(),
-    metadata: {
-      calculatorVersion: new URLSearchParams(location.search).get('v') || 'roof-check-master-v1'
-    },
-    prefill: {
-      name,
-      phone,
-      email: draft.email || '',
-      cityOrAddress: address,
-      monthlyBill,
-      message: draft.notes || ''
-    }
   });
 }
 
@@ -153,16 +225,22 @@ function collectSelectedObstacles() {
     .filter(Boolean);
 }
 
-function enrichLatestLead(draft) {
-  const [latest] = getLeads();
-  if (!latest) return;
-  saveLead({
-    ...latest,
-    email: draft.email || latest.email || '',
-    notes: draft.notes || latest.notes || '',
-    sourceType: 'roof-check',
-    sourcePage: location.pathname
-  });
+function syncReportDraft(name, phone, email) {
+  writeDraft({ ...readDraft(), name, phone, email });
+}
+
+function buildWhatsappFallbackUrl(reference) {
+  const message = [
+    'שלום Solatrix, ביקשתי לקבל את דוח ה-PDF של Roof Check ב-WhatsApp.',
+    reference ? `מספר פנייה: ${reference}` : '',
+    'אשמח לאישור שהבקשה התקבלה.'
+  ].filter(Boolean).join('\n');
+  return `https://wa.me/972547299727?text=${encodeURIComponent(message)}`;
+}
+
+function normalizePhone(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.startsWith('0') ? `972${digits.slice(1)}` : digits;
 }
 
 function downloadCsv() {
@@ -173,17 +251,6 @@ function downloadCsv() {
   link.download = `solatrix-leads-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-function refreshWhatsAppLink() {
-  const link = document.querySelector('.stageWhatsapp');
-  if (!link) return;
-  const name = document.querySelector('[data-field="leadName"]')?.value || '';
-  const phone = document.querySelector('[data-field="leadPhone"]')?.value || '';
-  const address = document.querySelector('[data-field="address"]')?.value || '';
-  const draft = readDraft();
-  const message = [`Roof Check lead`, `Name: ${name || '-'}`, `Phone: ${phone || '-'}`, `Email: ${draft.email || '-'}`, `Address: ${address || '-'}`, `Notes: ${draft.notes || '-'}`].join('\n');
-  link.href = `https://wa.me/972547299727?text=${encodeURIComponent(message)}`;
 }
 
 function resolveRoofPath() {
