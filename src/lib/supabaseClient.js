@@ -1,11 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
+const DEFAULT_SUPABASE_URL = 'https://nafzypkwdaxmsswgyuuk.supabase.co';
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_F4zwLhTECqsFJyH065nNyA_tsE3U7IK';
+
 let browserClient;
 
 export function getSupabaseConfig() {
   return {
-    url: String(import.meta.env.VITE_SUPABASE_URL || '').trim(),
-    anonKey: String(import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
+    url: String(import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL).trim(),
+    anonKey: String(import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_PUBLISHABLE_KEY).trim()
   };
 }
 
