@@ -1,5 +1,6 @@
 import './globalLeadForm.css';
 import { LeadSubmissionError, submitLead } from './lib/leadApi.js';
+import { formatPublicLeadReference } from './lib/publicReference.js';
 
 const CONTACT_KEYWORDS = [
   /צור\s*קשר/,
@@ -170,8 +171,9 @@ async function handleSubmit(event) {
 
     modalForm.reset();
     const success = modalForm.querySelector('.solatrixLeadSuccess');
-    success.textContent = result.leadNumber
-      ? `תודה, הפרטים התקבלו. מספר פנייה: ${result.leadNumber}`
+    const publicReference = formatPublicLeadReference(result.leadNumber);
+    success.textContent = publicReference
+      ? `תודה, הפרטים התקבלו. מספר פנייה: ${publicReference}`
       : 'תודה, הפרטים התקבלו. נציג Solatrix יחזור אליכם בהקדם.';
     success.hidden = false;
     success.focus();
