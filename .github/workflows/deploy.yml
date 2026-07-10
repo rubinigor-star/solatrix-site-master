@@ -32,6 +32,22 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify removed homepage sections
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page = Path('dist/index.html').read_text(encoding='utf-8')
+          forbidden = [
+              'הבעיה היא לא המערכת',
+              'כל גג נראה אחרת',
+          ]
+          found = [text for text in forbidden if text in page]
+          if found:
+              raise SystemExit(f'Homepage cleanup failed; still found: {found}')
+          print('Verified: both unwanted homepage sections are absent from dist/index.html')
+          PY
+
       - name: Copy beta pages
         run: |
           if [ -d "beta" ]; then
