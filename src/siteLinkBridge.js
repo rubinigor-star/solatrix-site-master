@@ -36,7 +36,7 @@ function isCalculatorPage() {
 
 function isHomePage() {
   const path = window.location.pathname.replace(/\/index\.html$/, '/');
-  return path.endsWith('/roof-check-by-solatrix/') || path === '/' || path.endsWith('/');
+  return path.endsWith('/roof-check-by-solatrix/') || path === '/' || path.endsWith('/solatrix-site-master/');
 }
 
 function siteRootUrl() {
@@ -110,6 +110,38 @@ function replaceDecisionBlock() {
   `;
 }
 
+function removeRedundantHomepageSections() {
+  if (!isHomePage()) return;
+
+  document.getElementById('decision')?.remove();
+
+  const normalize = (value = '') => value.replace(/\s+/g, ' ').trim();
+  const targets = [
+    'הבעיה היא לא המערכת',
+    'כל גג נראה אחרת'
+  ];
+
+  targets.forEach((target) => {
+    const headings = [...document.querySelectorAll('h1, h2, h3, h4, h5')]
+      .filter((heading) => normalize(heading.textContent).includes(target));
+
+    headings.forEach((heading) => {
+      const section = heading.closest('section');
+      if (section) {
+        section.remove();
+        return;
+      }
+
+      let block = heading.parentElement;
+      while (block?.parentElement && block.parentElement !== document.body && block.parentElement.tagName !== 'MAIN') {
+        if (block.getBoundingClientRect().height >= 320 && block.parentElement.children.length > 1) break;
+        block = block.parentElement;
+      }
+      block?.remove();
+    });
+  });
+}
+
 function connectRoofCheckLinks() {
   if (isCalculatorPage()) return;
 
@@ -142,7 +174,7 @@ function connectRoofCheckLinks() {
 }
 
 function initSolatrixSiteLinks() {
-  replaceDecisionBlock();
+  removeRedundantHomepageSections();
   connectRoofCheckLinks();
 }
 
