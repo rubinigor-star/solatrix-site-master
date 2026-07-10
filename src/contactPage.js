@@ -1,5 +1,6 @@
 import './contactPage.css';
 import { LeadSubmissionError, submitLead } from './lib/leadApi.js';
+import { formatPublicLeadReference } from './lib/publicReference.js';
 
 const form = document.querySelector('[data-contact-page-form]');
 const successPanel = document.querySelector('[data-contact-success]');
@@ -30,7 +31,8 @@ async function handleSubmit(event) {
     form.hidden = true;
     successPanel.hidden = false;
     const reference = successPanel.querySelector('[data-lead-reference]');
-    if (reference && result.leadNumber) reference.textContent = `מספר פנייה: ${result.leadNumber}`;
+    const publicReference = formatPublicLeadReference(result.leadNumber);
+    if (reference && publicReference) reference.textContent = `מספר פנייה: ${publicReference}`;
     successPanel.focus();
   } catch (error) {
     if (error instanceof LeadSubmissionError && error.code === 'validation_error') {
