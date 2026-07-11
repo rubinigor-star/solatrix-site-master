@@ -40,7 +40,7 @@ function patchLeaflet(L) {
   let roofPointSequence = 0;
   let roofPolygonSequence = 0;
   let draftPolygon = null;
-  let draftPoints = [];
+  let draftPoints = window.__solatrixRoofDraftPoints = [];
   let rebuilding = false;
   const savedPolygons = new Map();
 
@@ -58,6 +58,7 @@ function patchLeaflet(L) {
       roofPolygonSequence = 0;
       draftPolygon = null;
       draftPoints = [];
+      window.__solatrixRoofDraftPoints = draftPoints;
       savedPolygons.clear();
       return originalClearLayers.apply(this, args);
     };
@@ -202,8 +203,8 @@ function updatePoint(marker, L) {
     return;
   }
 
-  if (!window.__solatrixRoofDraftPoints) window.__solatrixRoofDraftPoints = [];
-  window.__solatrixRoofDraftPoints[marker.__solatrixPointIndex] = L.latLng(point.lat, point.lng);
+  const draftPoints = window.__solatrixRoofDraftPoints || [];
+  draftPoints[marker.__solatrixPointIndex] = L.latLng(point.lat, point.lng);
 }
 
 function installVertexStyles() {
