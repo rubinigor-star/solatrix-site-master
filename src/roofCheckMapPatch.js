@@ -1,9 +1,15 @@
 import { buildFullPdfReport } from './pdfReport.js';
 
-const PATCH_ID = 'solatrix-blue-point-roof-drawing-v3';
+const PATCH_ID = 'solatrix-blue-point-roof-drawing-v4';
 const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
 const LOGO_SRC = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_298,h_194,al_c,q_90,enc_avif,quality_auto/Solatrix%20Logo%20Sait%20Main.png';
+const ADDRESS_KEY = 'solatrix_roof_check_address';
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+const OVERPASS_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];
 
 const CONFIG = {
   productionPerKw: 1650,
@@ -20,11 +26,31 @@ const CONFIG = {
   defaultPhone: '972547299727'
 };
 
-const patchState = { map: null, layerGroup: null, currentPoints: [], surfaces: [], drawing: false };
+const patchState = {
+  map: null,
+  layerGroup: null,
+  currentPoints: [],
+  surfaces: [],
+  drawing: false,
+  autoDetecting: false,
+  addressResolved: false
+};
 
 function formatNumber(value) { return Math.round(Number(value) || 0).toLocaleString('he-IL'); }
 function formatMoney(value) { return '₪' + formatNumber(value); }
 function publishSurfaces() { window.__solatrixRoofSurfaces = patchState.surfaces.map((surface) => ({ ...surface })); }
+
+function getEnteredAddress() {
+  const current = document.querySelector('[data-field="address"]')?.value?.trim();
+  if (current) return current;
+  try { return localStorage.getItem(ADDRESS_KEY)?.trim() || ''; } catch { return ''; }
+}
+
+function rememberAddress(event) {
+  const input = event.target?.closest?.('[data-field="address"]');
+  if (!input) return;
+  try { localStorage.setItem(ADDRESS_KEY, String(input.value || '').trim()); } catch {}
+}
 
 function injectStyles() {
   if (document.getElementById(`${PATCH_ID}-style`)) return;
@@ -33,22 +59,24 @@ function injectStyles() {
   style.textContent = `
     .solatrixRealMapWrap{position:relative;width:100%;height:clamp(360px,52vh,620px);border-radius:30px;overflow:hidden;background:#e8ddd0;box-shadow:inset 0 0 0 1px rgba(47,35,22,.1)}
     .solatrixRealMap{position:absolute;inset:0;z-index:1;direction:ltr}
-    .solatrixMapToolbar{position:absolute;z-index:3;right:16px;top:16px;display:flex;flex-wrap:wrap;gap:10px;direction:rtl;max-width:min(460px,calc(100% - 32px))}
+    .solatrixMapToolbar{position:absolute;z-index:3;right:16px;top:16px;display:flex;flex-wrap:wrap;gap:10px;direction:rtl;max-width:min(560px,calc(100% - 32px))}
     .solatrixMapToolbar button{border:0;border-radius:999px;padding:10px 15px;font-family:inherit;font-weight:900;cursor:pointer;background:#fff;color:#241a10;box-shadow:0 10px 24px rgba(25,18,10,.12)}
     .solatrixMapToolbar button.primary{background:linear-gradient(135deg,var(--orange,#f5a11a),var(--orange2,#ffbd55));color:#17100a}
     .solatrixMapToolbar button.danger{background:#fff1f1;color:#b02b2b}
-    .solatrixMapHint{position:absolute;z-index:3;right:16px;bottom:16px;max-width:min(520px,calc(100% - 32px));border-radius:22px;padding:13px 16px;background:rgba(255,255,255,.92);box-shadow:0 12px 28px rgba(30,20,10,.12);font-size:15px;font-weight:800;color:#4a3b2a;direction:rtl}
-    .solatrixMapHint.success{background:rgba(232,251,242,.95);color:#16734a}
-    .solatrixMapSurfaceList{position:absolute;z-index:3;left:16px;top:16px;display:grid;gap:8px;direction:rtl;max-width:240px}
-    .solatrixMapSurfaceList div{border-radius:18px;background:rgba(255,255,255,.92);padding:10px 12px;font-size:14px;font-weight:900;color:#31251a;box-shadow:0 10px 22px rgba(25,18,10,.11)}
+    .solatrixMapToolbar button:disabled{opacity:.55;cursor:wait}
+    .solatrixMapHint{position:absolute;z-index:3;right:16px;bottom:16px;max-width:min(620px,calc(100% - 32px));border-radius:22px;padding:13px 16px;background:rgba(255,255,255,.94);box-shadow:0 12px 28px rgba(30,20,10,.12);font-size:15px;font-weight:800;color:#4a3b2a;direction:rtl}
+    .solatrixMapHint.success{background:rgba(232,251,242,.96);color:#16734a}
+    .solatrixMapSurfaceList{position:absolute;z-index:3;left:16px;top:16px;display:grid;gap:8px;direction:rtl;max-width:260px}
+    .solatrixMapSurfaceList div{border-radius:18px;background:rgba(255,255,255,.94);padding:10px 12px;font-size:14px;font-weight:900;color:#31251a;box-shadow:0 10px 22px rgba(25,18,10,.11)}
     .leaflet-container{font-family:inherit;background:#e8ddd0}
     .solatrixRoofPoint{width:9px!important;height:9px!important;border-radius:50%;background:#0b6fff;border:2px solid #fff;box-shadow:0 0 0 2px rgba(11,111,255,.35),0 4px 12px rgba(0,0,0,.25)}
+    .solatrixRoofPoint.first{width:13px!important;height:13px!important;background:#ff9d00;box-shadow:0 0 0 3px rgba(255,157,0,.25),0 4px 12px rgba(0,0,0,.25)}
     .solatrixDrawMode .leaflet-container{cursor:crosshair!important}
     .mapPanel.solatrixMapInjected{background:transparent;padding:0;min-height:360px;overflow:hidden;cursor:default!important}
     .mapPanel.solatrixMapInjected::before,.mapPanel.solatrixMapInjected .scanPulse,.mapPanel.solatrixMapInjected .roofCanvas,.mapPanel.solatrixMapInjected .mapBadge{display:none!important}
     .markStatus.solatrixPatched{background:#eaf7ff;border:1px solid rgba(11,111,255,.2);color:#145ea8}
     .nextTextBtn[data-action="next"]:not([disabled]){background:linear-gradient(135deg,var(--orange,#f5a11a),var(--orange2,#ffbd55))!important;color:#17100a!important;box-shadow:0 12px 28px rgba(245,161,26,.22)!important}
-    @media(max-width:760px){.solatrixRealMapWrap{height:460px;border-radius:24px}.solatrixMapToolbar{right:10px;left:10px;top:10px}.solatrixMapHint{right:10px;left:10px;bottom:10px}.solatrixMapSurfaceList{left:10px;top:auto;bottom:88px}}
+    @media(max-width:760px){.solatrixRealMapWrap{height:460px;border-radius:24px}.solatrixMapToolbar{right:10px;left:10px;top:10px}.solatrixMapHint{right:10px;left:10px;bottom:10px}.solatrixMapSurfaceList{left:10px;top:auto;bottom:105px}}
   `;
   document.head.appendChild(style);
 }
@@ -66,7 +94,7 @@ function loadLeaflet() {
 }
 
 function getAddressCenter() {
-  const address = (document.querySelector('[data-field="address"]')?.value || '').toLowerCase();
+  const address = getEnteredAddress().toLowerCase();
   if (address.includes('ירושלים') || address.includes('jerusalem')) return [31.778, 35.225];
   if (address.includes('תל') || address.includes('tel aviv')) return [32.0853, 34.7818];
   if (address.includes('חיפה') || address.includes('haifa') || address.includes('חרמון')) return [32.7937, 34.9892];
@@ -84,9 +112,30 @@ function polygonAreaM2(latlngs) {
   return Math.abs(sum / 2);
 }
 
-function surfaceFromLatLngs(latlngs) {
-  const area = Math.max(1, polygonAreaM2(latlngs));
-  return { id: patchState.surfaces.length + 1, name: `Roof ${patchState.surfaces.length + 1}`, area, orientation: 'South', factor: 1, points: latlngs.map((p) => `${p.lat.toFixed(7)},${p.lng.toFixed(7)}`).join(' '), latlngs: latlngs.map((p) => ({ lat: p.lat, lng: p.lng })) };
+function surfaceFromLatLngs(latlngs, source = 'manual') {
+  const normalized = latlngs
+    .map((point) => ({ lat: Number(point.lat), lng: Number(point.lng) }))
+    .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+  const area = Math.max(1, polygonAreaM2(normalized));
+  return {
+    id: patchState.surfaces.length + 1,
+    name: `Roof ${patchState.surfaces.length + 1}`,
+    area,
+    orientation: 'South',
+    factor: 1,
+    source,
+    points: normalized.map((p) => `${p.lat.toFixed(7)},${p.lng.toFixed(7)}`).join(' '),
+    latlngs: normalized
+  };
+}
+
+function pointIcon(index) {
+  return window.L.divIcon({
+    className: `solatrixRoofPoint${index === 0 ? ' first' : ''}`,
+    html: '',
+    iconSize: index === 0 ? [13, 13] : [9, 9],
+    iconAnchor: index === 0 ? [6, 6] : [4, 4]
+  });
 }
 
 function drawSurfaces() {
@@ -94,23 +143,35 @@ function drawSurfaces() {
   patchState.layerGroup.clearLayers();
   patchState.surfaces.forEach((surface) => {
     const latlngs = surface.latlngs.map((p) => window.L.latLng(p.lat, p.lng));
-    window.L.polygon(latlngs, { color: '#0b6fff', weight: 2, opacity: 0.95, fillColor: '#0b6fff', fillOpacity: 0.28 }).addTo(patchState.layerGroup);
-    latlngs.forEach((point) => window.L.marker(point, { icon: window.L.divIcon({ className: 'solatrixRoofPoint', html: '', iconSize: [9, 9], iconAnchor: [4, 4] }) }).addTo(patchState.layerGroup));
+    window.L.polygon(latlngs, { color: '#0b6fff', weight: 2.5, opacity: 0.95, fillColor: '#0b6fff', fillOpacity: 0.3 }).addTo(patchState.layerGroup);
+    latlngs.forEach((point, index) => window.L.marker(point, { icon: pointIcon(index) }).addTo(patchState.layerGroup));
   });
-  patchState.currentPoints.forEach((point) => window.L.marker(point, { icon: window.L.divIcon({ className: 'solatrixRoofPoint', html: '', iconSize: [9, 9], iconAnchor: [4, 4] }) }).addTo(patchState.layerGroup));
-  if (patchState.currentPoints.length > 1) window.L.polyline(patchState.currentPoints, { color: '#0b6fff', weight: 2, dashArray: '5,5' }).addTo(patchState.layerGroup);
+
+  patchState.currentPoints.forEach((point, index) => window.L.marker(point, { icon: pointIcon(index) }).addTo(patchState.layerGroup));
+  if (patchState.currentPoints.length >= 3) {
+    window.L.polygon(patchState.currentPoints, {
+      color: '#0b6fff',
+      weight: 2.5,
+      dashArray: '6,5',
+      fillColor: '#0b6fff',
+      fillOpacity: 0.2
+    }).addTo(patchState.layerGroup);
+  } else if (patchState.currentPoints.length > 1) {
+    window.L.polyline(patchState.currentPoints, { color: '#0b6fff', weight: 2.5, dashArray: '6,5' }).addTo(patchState.layerGroup);
+  }
 }
 
 function hasReadyDraft() { return patchState.currentPoints.length >= 3; }
 function canContinue() { return patchState.surfaces.length > 0 || hasReadyDraft(); }
 
 function calculatePatchReport() {
-  const roofArea = patchState.surfaces.reduce((sum, surface) => sum + Number(surface.area || 0), 0);
+  const draftArea = hasReadyDraft() ? polygonAreaM2(patchState.currentPoints) : 0;
+  const roofArea = patchState.surfaces.reduce((sum, surface) => sum + Number(surface.area || 0), 0) + draftArea;
   const usableArea = roofArea * CONFIG.usableRoofFactor;
   const potentialKw = usableArea / CONFIG.sqmPerKw;
   const systemKw = Math.min(potentialKw, CONFIG.homeSystemLimitKw);
   const annualProduction = systemKw * CONFIG.productionPerKw;
-  const monthlyBill = Number(document.querySelector('[data-field="monthlyBill"]')?.value || 850);
+  const monthlyBill = Number(window.__solatrixRoofCheckState?.monthlyBill || document.querySelector('[data-field="monthlyBill"]')?.value || 850);
   const annualConsumption = (monthlyBill * 12) / CONFIG.buyRate;
   const selfConsumed = Math.min(annualProduction * CONFIG.defaultSelfUseShare, annualConsumption);
   const exported = Math.max(annualProduction - selfConsumed, 0);
@@ -135,10 +196,16 @@ function updateMapText(message, success = false) {
   const status = document.querySelector('.markStatus');
   if (status) {
     status.classList.add('solatrixPatched');
-    if (patchState.surfaces.length) status.textContent = `סומנו ${patchState.surfaces.length} שטחי גג — ${formatNumber(calculatePatchReport().roofArea)} מ״ר בסך הכל`;
-    else if (hasReadyDraft()) status.textContent = `סומנו ${patchState.currentPoints.length} נקודות. אפשר ללחוץ “סיימתי” כדי לשמור את שטח הגג ולהמשיך.`;
-    else if (patchState.currentPoints.length) status.textContent = `נוספו ${patchState.currentPoints.length} נקודות. צריך לפחות 3 נקודות כדי להמשיך.`;
-    else status.textContent = 'עדיין לא סומן שטח גג. התחילו סימון ולחצו על פינות הגג.';
+    if (patchState.surfaces.length) {
+      const auto = patchState.surfaces.some((surface) => surface.source === 'auto');
+      status.textContent = `${auto ? 'זוהה אוטומטית' : 'סומנו'} ${patchState.surfaces.length} שטחי גג — ${formatNumber(calculatePatchReport().roofArea)} מ״ר בסך הכל`;
+    } else if (hasReadyDraft()) {
+      status.textContent = `השטח נסגר ומודגש. לחצו על הנקודה הכתומה או על “סיימתי” כדי לשמור.`;
+    } else if (patchState.currentPoints.length) {
+      status.textContent = `נוספו ${patchState.currentPoints.length} נקודות. צריך לפחות 3 נקודות כדי לסגור שטח.`;
+    } else {
+      status.textContent = patchState.autoDetecting ? 'מאתרים את קווי המתאר של הבניין...' : 'לא זוהה שטח אוטומטי. אפשר לסמן ידנית את פינות הגג.';
+    }
   }
   const nextBtn = document.querySelector('.nextTextBtn[data-action="next"]');
   if (nextBtn) {
@@ -146,15 +213,28 @@ function updateMapText(message, success = false) {
     else nextBtn.setAttribute('disabled', 'disabled');
   }
   const list = document.querySelector('.solatrixMapSurfaceList');
-  if (list) list.innerHTML = patchState.surfaces.map((surface, index) => `<div>שטח ${index + 1}: ${formatNumber(surface.area)} מ״ר</div>`).join('');
+  if (list) list.innerHTML = patchState.surfaces.map((surface, index) => `<div>${surface.source === 'auto' ? 'זוהה אוטומטית' : `שטח ${index + 1}`}: ${formatNumber(surface.area)} מ״ר</div>`).join('');
+}
+
+function setStartButtonMode(replace = false) {
+  const button = document.querySelector('[data-govmap-action="start"]');
+  if (!button) return;
+  button.dataset.replace = replace ? 'true' : 'false';
+  button.textContent = replace ? 'תיקון ידני' : 'התחל סימון';
 }
 
 function startDrawing(event) {
   event?.preventDefault?.(); event?.stopPropagation?.();
+  const replaceExisting = event?.currentTarget?.dataset?.replace === 'true';
+  if (replaceExisting) {
+    patchState.surfaces = [];
+    publishSurfaces();
+  }
   patchState.drawing = true;
   patchState.currentPoints = [];
   document.body.classList.add('solatrixDrawMode');
-  updateMapText('מצב סימון פעיל: לחצו על פינות הגג. אחרי 3 נקודות אפשר ללחוץ “סיימתי”.', false);
+  setStartButtonMode(false);
+  updateMapText('מצב סימון פעיל: לחצו על פינות הגג לפי הסדר. אחרי 3 נקודות השטח ייסגר ויודגש אוטומטית.', false);
   drawSurfaces();
 }
 
@@ -167,7 +247,7 @@ function finishDrawing(event) {
   document.body.classList.remove('solatrixDrawMode');
   publishSurfaces();
   drawSurfaces();
-  updateMapText('השטח נשמר. אפשר להמשיך לשלב הבא.', true);
+  updateMapText('השטח נסגר, הודגש ונשמר. אפשר להמשיך לשלב הבא.', true);
   return true;
 }
 
@@ -175,9 +255,168 @@ function removeLastPoint(event) {
   event?.preventDefault?.(); event?.stopPropagation?.();
   patchState.currentPoints.pop(); drawSurfaces(); updateMapText(`נותרו ${patchState.currentPoints.length} נקודות בסימון הנוכחי.`, false);
 }
+
 function clearAll(event) {
   event?.preventDefault?.(); event?.stopPropagation?.();
-  patchState.surfaces = []; patchState.currentPoints = []; patchState.drawing = false; document.body.classList.remove('solatrixDrawMode'); publishSurfaces(); drawSurfaces(); updateMapText('נוקה הסימון. התחילו סימון חדש.', false);
+  patchState.surfaces = [];
+  patchState.currentPoints = [];
+  patchState.drawing = false;
+  patchState.addressResolved = true;
+  document.body.classList.remove('solatrixDrawMode');
+  setStartButtonMode(false);
+  publishSurfaces();
+  drawSurfaces();
+  updateMapText('הסימון נוקה. לחצו “התחל סימון” וסמנו את פינות הגג.', false);
+}
+
+function ringFromGeoJson(geometry) {
+  if (!geometry) return [];
+  let rings = [];
+  if (geometry.type === 'Polygon') rings = geometry.coordinates || [];
+  if (geometry.type === 'MultiPolygon') rings = (geometry.coordinates || []).flatMap((polygon) => polygon || []);
+  const candidates = rings
+    .map((ring) => ring.map(([lng, lat]) => ({ lat: Number(lat), lng: Number(lng) })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng)))
+    .map((ring) => {
+      if (ring.length > 1) {
+        const first = ring[0]; const last = ring[ring.length - 1];
+        if (first.lat === last.lat && first.lng === last.lng) return ring.slice(0, -1);
+      }
+      return ring;
+    })
+    .filter((ring) => ring.length >= 3)
+    .sort((a, b) => polygonAreaM2(b) - polygonAreaM2(a));
+  return candidates[0] || [];
+}
+
+function pointInPolygon(point, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng; const yi = polygon[i].lat;
+    const xj = polygon[j].lng; const yj = polygon[j].lat;
+    const intersects = ((yi > point.lat) !== (yj > point.lat)) && (point.lng < (xj - xi) * (point.lat - yi) / ((yj - yi) || Number.EPSILON) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function centroid(polygon) {
+  return polygon.reduce((acc, point) => ({ lat: acc.lat + point.lat / polygon.length, lng: acc.lng + point.lng / polygon.length }), { lat: 0, lng: 0 });
+}
+
+function distanceMeters(a, b) {
+  const earth = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * earth * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+async function geocodeAddress(address) {
+  const params = new URLSearchParams({
+    q: address,
+    format: 'jsonv2',
+    limit: '1',
+    countrycodes: 'il',
+    polygon_geojson: '1',
+    addressdetails: '1',
+    'accept-language': 'he'
+  });
+  const response = await fetch(`${NOMINATIM_URL}?${params.toString()}`, { headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new Error(`Geocoding failed: ${response.status}`);
+  const results = await response.json();
+  if (!Array.isArray(results) || !results[0]) return null;
+  return results[0];
+}
+
+async function queryNearbyBuildings(point) {
+  const query = `[out:json][timeout:14];way(around:90,${point.lat},${point.lng})["building"];out geom;`;
+  let lastError = null;
+  for (const endpoint of OVERPASS_URLS) {
+    try {
+      const response = await fetch(`${endpoint}?data=${encodeURIComponent(query)}`, { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error(`Overpass failed: ${response.status}`);
+      const payload = await response.json();
+      return (payload.elements || [])
+        .map((element) => (element.geometry || []).map((node) => ({ lat: Number(node.lat), lng: Number(node.lon) })))
+        .map((ring) => {
+          if (ring.length > 1) {
+            const first = ring[0]; const last = ring[ring.length - 1];
+            if (first.lat === last.lat && first.lng === last.lng) return ring.slice(0, -1);
+          }
+          return ring;
+        })
+        .filter((ring) => ring.length >= 3)
+        .filter((ring) => {
+          const area = polygonAreaM2(ring);
+          return area >= 12 && area <= 100000;
+        });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
+  return [];
+}
+
+function chooseBuilding(point, polygons) {
+  if (!polygons.length) return [];
+  const containing = polygons.filter((polygon) => pointInPolygon(point, polygon));
+  const candidates = containing.length ? containing : polygons;
+  return candidates
+    .map((polygon) => ({ polygon, distance: distanceMeters(point, centroid(polygon)), area: polygonAreaM2(polygon) }))
+    .filter((candidate) => containing.length || candidate.distance <= 90)
+    .sort((a, b) => a.distance - b.distance || b.area - a.area)[0]?.polygon || [];
+}
+
+async function autoDetectRoof(panel) {
+  if (patchState.autoDetecting || patchState.addressResolved || patchState.surfaces.length) return;
+  const address = getEnteredAddress();
+  if (!address) {
+    patchState.addressResolved = true;
+    updateMapText('לא נמצאה כתובת שמורה. אפשר לסמן את הגג ידנית.', false);
+    return;
+  }
+
+  patchState.autoDetecting = true;
+  const startButton = panel.querySelector('[data-govmap-action="start"]');
+  if (startButton) startButton.disabled = true;
+  updateMapText(`מאתרים אוטומטית את קווי המתאר של הבניין בכתובת: ${address}`, false);
+
+  try {
+    const result = await geocodeAddress(address);
+    if (!result) throw new Error('Address not found');
+    const point = { lat: Number(result.lat), lng: Number(result.lon) };
+    let polygon = ringFromGeoJson(result.geojson);
+
+    if (polygon.length < 3 || polygonAreaM2(polygon) < 12) {
+      const buildings = await queryNearbyBuildings(point);
+      polygon = chooseBuilding(point, buildings);
+    }
+
+    patchState.map.setView([point.lat, point.lng], 20);
+    if (polygon.length < 3) {
+      patchState.addressResolved = true;
+      updateMapText('מצאנו את הכתובת, אבל לא נמצאו קווי מתאר אמינים של הבניין. סמנו את הגג ידנית.', false);
+      return;
+    }
+
+    patchState.surfaces = [surfaceFromLatLngs(polygon, 'auto')];
+    patchState.addressResolved = true;
+    publishSurfaces();
+    drawSurfaces();
+    patchState.map.fitBounds(window.L.latLngBounds(polygon.map((p) => [p.lat, p.lng])).pad(0.35), { maxZoom: 20 });
+    setStartButtonMode(true);
+    updateMapText('זיהינו וסימנו אוטומטית את שטח הבניין. בדקו שהמסגרת הכחולה נכונה; לתיקון לחצו “תיקון ידני”.', true);
+  } catch (error) {
+    console.warn('Automatic building outline failed', error);
+    patchState.addressResolved = true;
+    updateMapText('לא הצלחנו לזהות את קווי המתאר אוטומטית. אפשר לסמן את הגג ידנית בכמה לחיצות.', false);
+  } finally {
+    patchState.autoDetecting = false;
+    if (startButton) startButton.disabled = false;
+  }
 }
 
 function patchReportScreen() {
@@ -195,7 +434,7 @@ function patchReportScreen() {
     pdfBtn.dataset.blueMapPdf = 'true';
     pdfBtn.addEventListener('click', (event) => {
       event.preventDefault(); event.stopImmediatePropagation();
-      const html = buildFullPdfReport({ report, state: { address: document.querySelector('[data-field="address"]')?.value || '', leadName: document.querySelector('[data-field="leadName"]')?.value || '', leadPhone: document.querySelector('[data-field="leadPhone"]')?.value || '', monthlyBill: document.querySelector('[data-field="monthlyBill"]')?.value || 850 }, config: CONFIG, logoSrc: LOGO_SRC, formatNumber, formatMoney });
+      const html = buildFullPdfReport({ report, state: { address: getEnteredAddress(), leadName: document.querySelector('[data-field="leadName"]')?.value || '', leadPhone: document.querySelector('[data-field="leadPhone"]')?.value || '', monthlyBill: window.__solatrixRoofCheckState?.monthlyBill || 850 }, config: CONFIG, logoSrc: LOGO_SRC, formatNumber, formatMoney });
       const win = window.open('', '_blank'); if (!win) return; win.document.open(); win.document.write(html); win.document.close();
     }, true);
   }
@@ -208,23 +447,48 @@ async function installMapIntoOriginalScreen() {
   panel.dataset.govmapInstalled = 'true';
   panel.classList.add('solatrixMapInjected');
   panel.removeAttribute('data-action');
-  panel.innerHTML = `<div class="solatrixRealMapWrap"><div id="solatrix-real-roof-map" class="solatrixRealMap"></div><div class="solatrixMapToolbar"><button class="primary" data-govmap-action="start">התחל סימון</button><button data-govmap-action="finish">סיים שטח</button><button data-govmap-action="undo">בטל נקודה</button><button class="danger" data-govmap-action="clear">נקה הכל</button></div><div class="solatrixMapSurfaceList"></div><div class="solatrixMapHint">הזיזו וקרבו את המפה. לחצו “התחל סימון”, סמנו פינות, ואז “סיימתי”.</div></div>`;
+  panel.innerHTML = `<div class="solatrixRealMapWrap"><div id="solatrix-real-roof-map" class="solatrixRealMap"></div><div class="solatrixMapToolbar"><button class="primary" data-govmap-action="start">התחל סימון</button><button data-govmap-action="finish">סיים שטח</button><button data-govmap-action="undo">בטל נקודה</button><button class="danger" data-govmap-action="clear">נקה הכל</button></div><div class="solatrixMapSurfaceList"></div><div class="solatrixMapHint">מאתרים את הגג לפי הכתובת שהוזנה...</div></div>`;
   const L = await loadLeaflet();
   const center = getAddressCenter();
-  patchState.map = L.map('solatrix-real-roof-map', { zoomControl: true, attributionControl: true, maxZoom: 20 }).setView(center, 18);
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20, attribution: 'Imagery © Esri' }).addTo(patchState.map);
+  if (patchState.map) {
+    try { patchState.map.remove(); } catch {}
+  }
+  patchState.map = L.map('solatrix-real-roof-map', { zoomControl: true, attributionControl: true, maxZoom: 21, doubleClickZoom: false }).setView(center, 18);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, attribution: 'Imagery © Esri' }).addTo(patchState.map);
   patchState.layerGroup = L.layerGroup().addTo(patchState.map);
   patchState.map.on('click', (event) => {
     if (!patchState.drawing) return;
+    if (patchState.currentPoints.length >= 3) {
+      const first = patchState.map.latLngToContainerPoint(patchState.currentPoints[0]);
+      const clicked = patchState.map.latLngToContainerPoint(event.latlng);
+      if (first.distanceTo(clicked) <= 20) {
+        finishDrawing();
+        return;
+      }
+    }
     patchState.currentPoints.push(event.latlng);
     drawSurfaces();
-    updateMapText(`נוספה נקודה ${patchState.currentPoints.length}.`, false);
+    updateMapText(patchState.currentPoints.length >= 3
+      ? `נוספה נקודה ${patchState.currentPoints.length}. השטח נסגר ומודגש אוטומטית; לחצו על הנקודה הכתומה לסיום.`
+      : `נוספה נקודה ${patchState.currentPoints.length}.`, false);
+  });
+  patchState.map.on('dblclick', () => {
+    if (hasReadyDraft()) finishDrawing();
   });
   panel.querySelector('[data-govmap-action="start"]').addEventListener('click', startDrawing);
   panel.querySelector('[data-govmap-action="finish"]').addEventListener('click', finishDrawing);
   panel.querySelector('[data-govmap-action="undo"]').addEventListener('click', removeLastPoint);
   panel.querySelector('[data-govmap-action="clear"]').addEventListener('click', clearAll);
-  drawSurfaces(); updateMapText('המפה הוטענה. לחצו “התחל סימון”, ואז סמנו את פינות הגג בנקודות כחולות.', false);
+  drawSurfaces();
+  if (patchState.surfaces.length) {
+    const allPoints = patchState.surfaces.flatMap((surface) => surface.latlngs || []);
+    if (allPoints.length) patchState.map.fitBounds(L.latLngBounds(allPoints.map((p) => [p.lat, p.lng])).pad(0.3), { maxZoom: 20 });
+    setStartButtonMode(patchState.surfaces.some((surface) => surface.source === 'auto'));
+    updateMapText('הסימון הקודם נטען. בדקו את המסגרת הכחולה והמשיכו.', true);
+  } else {
+    updateMapText('מאתרים את קווי המתאר של הבניין לפי הכתובת...', false);
+    autoDetectRoof(panel);
+  }
   setTimeout(() => patchState.map.invalidateSize(), 150);
 }
 
@@ -248,11 +512,15 @@ function tick() {
   if (path.includes('/roof-marking')) installMapIntoOriginalScreen().catch((error) => console.warn('Solatrix map patch failed', error));
   if (path.includes('/report')) patchReportScreen();
 }
+
 function watchRouter() {
   const pushState = history.pushState;
   history.pushState = function (...args) { const result = pushState.apply(this, args); setTimeout(tick, 80); return result; };
   window.addEventListener('popstate', () => setTimeout(tick, 80));
   setInterval(tick, 700);
 }
-patchOriginalButtons(); watchRouter();
+
+document.addEventListener('input', rememberAddress, true);
+patchOriginalButtons();
+watchRouter();
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick); else tick();
