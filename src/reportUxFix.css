@@ -139,10 +139,10 @@
 }
 
 .reportWhatsappConsent {
-  display: grid;
-  grid-template-columns: 22px 1fr;
+  display: flex;
+  flex-direction: row;
   gap: 11px;
-  align-items: start;
+  align-items: flex-start;
   margin: 16px 0 0;
   padding: 14px;
   border-radius: 16px;
@@ -152,13 +152,28 @@
   font-size: 13px;
   font-weight: 750;
   line-height: 1.5;
+  direction: rtl;
+  text-align: right;
+  cursor: pointer;
 }
 
 .reportWhatsappConsent input {
-  width: 19px;
-  height: 19px;
-  margin-top: 2px;
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  flex: 0 0 20px;
+  width: 20px !important;
+  min-width: 20px;
+  max-width: 20px;
+  height: 20px !important;
+  margin: 2px 0 0 !important;
+  padding: 0 !important;
   accent-color: #25d366;
+}
+
+.reportWhatsappConsent span {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
 }
 
 .reportWhatsappSubmit {
@@ -202,9 +217,14 @@
 }
 
 @media (max-width: 760px) {
+  .reportWhatsappOffer {
+    border-radius: 22px;
+  }
+
   .reportWhatsappIntro {
-    grid-template-columns: 58px 1fr;
-    padding: 18px;
+    grid-template-columns: 58px minmax(0,1fr);
+    gap: 12px;
+    padding: 16px;
   }
 
   .reportWhatsappBadge {
@@ -213,20 +233,52 @@
     border-radius: 18px;
   }
 
+  .reportWhatsappCopy h3 {
+    font-size: 21px;
+    line-height: 1.15;
+  }
+
+  .reportWhatsappCopy p {
+    font-size: 14px;
+  }
+
   .reportWhatsappOpen {
     grid-column: 1/-1;
     width: 100%;
+    min-width: 0;
   }
 
   .reportWhatsappForm {
-    padding: 0 18px 18px;
+    padding: 0 14px 16px;
+  }
+
+  .reportWhatsappFormIntro {
+    margin-top: 16px;
+    font-size: 14px;
+    line-height: 1.45;
   }
 
   .reportWhatsappGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0,1fr);
   }
 
   .reportWhatsappGrid .wide {
     grid-column: auto;
+  }
+
+  .reportWhatsappConsent {
+    gap: 10px;
+    padding: 13px 12px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .reportWhatsappConsent input {
+    flex-basis: 22px;
+    width: 22px !important;
+    min-width: 22px;
+    max-width: 22px;
+    height: 22px !important;
+    margin-top: 1px !important;
   }
 }
