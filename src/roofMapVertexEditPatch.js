@@ -1,9 +1,9 @@
-const PATCH_FLAG = '__solatrixRoofVertexEditingInstalled';
+const PATCH_FLAG = '__solatrixRoofVertexEditingInstalledV2';
 
 if (!window[PATCH_FLAG]) {
   window[PATCH_FLAG] = true;
   installLeafletHook();
-  installMobileVertexStyles();
+  installVertexStyles();
   watchRoofEditor();
 }
 
@@ -29,17 +29,20 @@ function installLeafletHook() {
       if (!window.L) return;
       clearInterval(timer);
       patchLeaflet(window.L);
-    }, 50);
+    }, 40);
   }
 }
 
 function patchLeaflet(L) {
-  if (!L || L.__solatrixVertexEditingPatched) return;
-  L.__solatrixVertexEditingPatched = true;
+  if (!L || L.__solatrixVertexEditingPatchedV2) return;
+  L.__solatrixVertexEditingPatchedV2 = true;
 
   let roofPointSequence = 0;
   let roofPolygonSequence = 0;
-  const roofPolygons = new Map();
+  let draftPolygon = null;
+  let draftPoints = [];
+  let rebuilding = false;
+  const savedPolygons = new Map();
 
   const originalMapFactory = L.map;
   L.map = function (...args) {
@@ -53,7 +56,9 @@ function patchLeaflet(L) {
     L.LayerGroup.prototype.clearLayers = function (...args) {
       roofPointSequence = 0;
       roofPolygonSequence = 0;
-      roofPolygons.clear();
+      draftPolygon = null;
+      draftPoints = [];
+      savedPolygons.clear();
       return originalClearLayers.apply(this, args);
     };
   }
@@ -61,12 +66,15 @@ function patchLeaflet(L) {
   const originalPolygonFactory = L.polygon;
   L.polygon = function (latlngs, options = {}) {
     const polygon = originalPolygonFactory.call(this, latlngs, options);
+    if (options?.color !== '#0b6fff') return polygon;
+
     const surfaces = currentSurfaces();
-    if (options?.color === '#0b6fff' && roofPolygonSequence < surfaces.length) {
-      polygon.__solatrixSurfaceIndex = roofPolygonSequence;
-      roofPolygons.set(roofPolygonSequence, polygon);
-      roofPolygonSequence += 1;
+    if (roofPolygonSequence < surfaces.length) {
+      savedPolygons.set(roofPolygonSequence, polygon);
+    } else {
+      draftPolygon = polygon;
     }
+    roofPolygonSequence += 1;
     return polygon;
   };
 
@@ -74,18 +82,28 @@ function patchLeaflet(L) {
   L.marker = function (latlng, options = {}) {
     const className = options?.icon?.options?.className || '';
     const isRoofPoint = className.includes('solatrixRoofPoint');
-    const isSavedSurfacePoint = isRoofPoint && !document.body.classList.contains('solatrixDrawMode');
-    const markerOptions = isSavedSurfacePoint ? { ...options, draggable: true, keyboard: false } : options;
-    const marker = originalMarkerFactory.call(this, latlng, markerOptions);
+    const marker = originalMarkerFactory.call(this, latlng, isRoofPoint
+      ? { ...options, draggable: true, keyboard: false, autoPan: true }
+      : options);
 
-    if (!isSavedSurfacePoint) return marker;
+    if (!isRoofPoint) return marker;
 
-    const location = locateSurfacePoint(roofPointSequence);
+    const savedPointCount = totalSavedPointCount();
+    const serial = roofPointSequence;
     roofPointSequence += 1;
-    if (!location) return marker;
 
-    marker.__solatrixSurfaceIndex = location.surfaceIndex;
-    marker.__solatrixPointIndex = location.pointIndex;
+    if (serial < savedPointCount) {
+      const location = locateSavedSurfacePoint(serial);
+      if (!location) return marker;
+      marker.__solatrixPointKind = 'saved';
+      marker.__solatrixSurfaceIndex = location.surfaceIndex;
+      marker.__solatrixPointIndex = location.pointIndex;
+    } else {
+      const draftIndex = serial - savedPointCount;
+      marker.__solatrixPointKind = 'draft';
+      marker.__solatrixPointIndex = draftIndex;
+      draftPoints[draftIndex] = L.latLng(latlng);
+    }
 
     marker.on('dragstart', () => {
       marker._map?.dragging?.disable?.();
@@ -93,28 +111,78 @@ function patchLeaflet(L) {
     });
 
     marker.on('drag', () => {
-      updateSharedSurfacePoint(marker);
-      const surface = currentSurfaces()[marker.__solatrixSurfaceIndex];
-      const polygon = roofPolygons.get(marker.__solatrixSurfaceIndex);
-      if (surface?.latlngs && polygon) polygon.setLatLngs(surface.latlngs);
+      updatePoint(marker, L);
+      updateVisiblePolygon(marker);
     });
 
     marker.on('dragend', () => {
       marker._map?.dragging?.enable?.();
       document.body.classList.remove('solatrixVertexDragging');
-      updateSharedSurfacePoint(marker);
-      rebuildSurfaceFromDraggedPoints(marker.__solatrixSurfaceIndex, marker._map || window.__solatrixLeafletMap, L);
+      updatePoint(marker, L);
+      updateVisiblePolygon(marker);
+      if (!rebuilding) rebuildAllGeometry(marker._map || window.__solatrixLeafletMap, L, marker.__solatrixPointKind === 'draft');
     });
 
     return marker;
   };
+
+  function updateVisiblePolygon(marker) {
+    if (marker.__solatrixPointKind === 'saved') {
+      const surface = currentSurfaces()[marker.__solatrixSurfaceIndex];
+      const polygon = savedPolygons.get(marker.__solatrixSurfaceIndex);
+      if (surface?.latlngs && polygon) polygon.setLatLngs(surface.latlngs);
+      return;
+    }
+    if (draftPolygon && draftPoints.length >= 3) draftPolygon.setLatLngs(draftPoints.filter(Boolean));
+  }
+
+  function rebuildAllGeometry(map, leaflet, keepDraftOpen) {
+    const clearButton = document.querySelector('[data-govmap-action="clear"]');
+    const startButton = document.querySelector('[data-govmap-action="start"]');
+    const finishButton = document.querySelector('[data-govmap-action="finish"]');
+    if (!map || !clearButton || !startButton || !finishButton) return;
+
+    const savedSnapshot = currentSurfaces()
+      .map((surface) => (surface.latlngs || []).map((point) => leaflet.latLng(point.lat, point.lng)))
+      .filter((points) => points.length >= 3);
+    const draftSnapshot = draftPoints.filter(Boolean).map((point) => leaflet.latLng(point.lat, point.lng));
+
+    rebuilding = true;
+    clearButton.click();
+
+    savedSnapshot.forEach((points) => {
+      startButton.click();
+      points.forEach((point) => map.fire('click', { latlng: point }));
+      finishButton.click();
+    });
+
+    if (keepDraftOpen && draftSnapshot.length) {
+      startButton.click();
+      draftSnapshot.forEach((point) => map.fire('click', { latlng: point }));
+    }
+
+    rebuilding = false;
+    setTimeout(() => {
+      const hint = document.querySelector('.solatrixMapHint');
+      if (hint) {
+        hint.textContent = keepDraftOpen
+          ? 'הנקודה הוזזה. אפשר להמשיך לגרור נקודות או לסיים את השטח.'
+          : 'הנקודה הוזזה והשטח עודכן. אפשר לגרור כל נקודה שוב כדי לדייק.';
+        hint.classList.add('success');
+      }
+    }, 80);
+  }
 }
 
 function currentSurfaces() {
   return Array.isArray(window.__solatrixRoofSurfaces) ? window.__solatrixRoofSurfaces : [];
 }
 
-function locateSurfacePoint(serial) {
+function totalSavedPointCount() {
+  return currentSurfaces().reduce((sum, surface) => sum + (Array.isArray(surface?.latlngs) ? surface.latlngs.length : 0), 0);
+}
+
+function locateSavedSurfacePoint(serial) {
   let offset = serial;
   const surfaces = currentSurfaces();
   for (let surfaceIndex = 0; surfaceIndex < surfaces.length; surfaceIndex += 1) {
@@ -125,74 +193,58 @@ function locateSurfacePoint(serial) {
   return null;
 }
 
-function updateSharedSurfacePoint(marker) {
-  const surface = currentSurfaces()[marker.__solatrixSurfaceIndex];
-  if (!surface?.latlngs?.[marker.__solatrixPointIndex]) return;
+function updatePoint(marker, L) {
   const point = marker.getLatLng();
-  surface.latlngs[marker.__solatrixPointIndex] = { lat: point.lat, lng: point.lng };
+  if (marker.__solatrixPointKind === 'saved') {
+    const surface = currentSurfaces()[marker.__solatrixSurfaceIndex];
+    if (!surface?.latlngs?.[marker.__solatrixPointIndex]) return;
+    surface.latlngs[marker.__solatrixPointIndex] = { lat: point.lat, lng: point.lng };
+    return;
+  }
+
+  if (!window.__solatrixRoofDraftPoints) window.__solatrixRoofDraftPoints = [];
+  window.__solatrixRoofDraftPoints[marker.__solatrixPointIndex] = L.latLng(point.lat, point.lng);
 }
 
-function rebuildSurfaceFromDraggedPoints(surfaceIndex, map, L) {
-  const surface = currentSurfaces()[surfaceIndex];
-  if (!surface?.latlngs?.length || !map || !L) return;
-  const points = surface.latlngs.map((point) => L.latLng(point.lat, point.lng));
-
-  const clearButton = document.querySelector('[data-govmap-action="clear"]');
-  const startButton = document.querySelector('[data-govmap-action="start"]');
-  const finishButton = document.querySelector('[data-govmap-action="finish"]');
-  if (!clearButton || !startButton || !finishButton) return;
-
-  clearButton.click();
-  startButton.click();
-  points.forEach((latlng) => map.fire('click', { latlng }));
-  finishButton.click();
-
-  setTimeout(() => {
-    const hint = document.querySelector('.solatrixMapHint');
-    if (hint) {
-      hint.textContent = 'הנקודות עודכנו. אפשר לגרור כל נקודה כחולה שוב כדי לדייק, או להמשיך לשלב הבא.';
-      hint.classList.add('success');
-    }
-  }, 60);
-}
-
-function installMobileVertexStyles() {
-  if (document.getElementById('solatrix-roof-vertex-edit-style')) return;
+function installVertexStyles() {
+  if (document.getElementById('solatrix-roof-vertex-edit-style-v2')) return;
   const style = document.createElement('style');
-  style.id = 'solatrix-roof-vertex-edit-style';
+  style.id = 'solatrix-roof-vertex-edit-style-v2';
   style.textContent = `
     .solatrixRoofPoint{
-      width:14px!important;
-      height:14px!important;
-      margin-left:-7px!important;
-      margin-top:-7px!important;
-      cursor:grab!important;
-      touch-action:none!important;
-      background:#0b6fff!important;
-      border:3px solid #fff!important;
-      box-shadow:0 0 0 3px rgba(11,111,255,.28),0 5px 14px rgba(0,0,0,.28)!important;
-    }
-    .solatrixRoofPoint.first{
       width:16px!important;
       height:16px!important;
       margin-left:-8px!important;
       margin-top:-8px!important;
+      cursor:grab!important;
+      touch-action:none!important;
+      background:#0b6fff!important;
+      border:3px solid #fff!important;
+      box-shadow:0 0 0 4px rgba(11,111,255,.28),0 5px 14px rgba(0,0,0,.28)!important;
+      z-index:1000!important;
+    }
+    .solatrixRoofPoint.first{
+      width:18px!important;
+      height:18px!important;
+      margin-left:-9px!important;
+      margin-top:-9px!important;
       background:#ff9d00!important;
     }
     .solatrixVertexDragging .leaflet-marker-icon{cursor:grabbing!important}
     @media(max-width:760px){
       .solatrixRoofPoint{
-        width:20px!important;
-        height:20px!important;
-        margin-left:-10px!important;
-        margin-top:-10px!important;
-        border-width:4px!important;
+        width:28px!important;
+        height:28px!important;
+        margin-left:-14px!important;
+        margin-top:-14px!important;
+        border-width:5px!important;
+        box-shadow:0 0 0 5px rgba(11,111,255,.26),0 6px 16px rgba(0,0,0,.3)!important;
       }
       .solatrixRoofPoint.first{
-        width:22px!important;
-        height:22px!important;
-        margin-left:-11px!important;
-        margin-top:-11px!important;
+        width:30px!important;
+        height:30px!important;
+        margin-left:-15px!important;
+        margin-top:-15px!important;
       }
     }
   `;
@@ -202,18 +254,19 @@ function installMobileVertexStyles() {
 function watchRoofEditor() {
   const refreshHint = () => {
     if (!(location.pathname || '').includes('/roof-marking')) return;
-    const surfaces = currentSurfaces();
-    if (!surfaces.length || document.body.classList.contains('solatrixDrawMode')) return;
+    const hasSaved = currentSurfaces().length > 0;
+    const hasDraft = document.querySelectorAll('.solatrixRoofPoint').length > 0;
+    if ((!hasSaved && !hasDraft) || document.body.classList.contains('solatrixVertexDragging')) return;
     const hint = document.querySelector('.solatrixMapHint');
-    if (!hint || hint.dataset.vertexEditingHint === 'true') return;
-    hint.textContent = 'אפשר לגרור כל נקודה כחולה כדי לדייק את קווי המתאר. אין צורך למחוק ולסמן מחדש.';
+    if (!hint || hint.dataset.vertexEditingHintV2 === 'true') return;
+    hint.textContent = 'לחצו והחזיקו נקודה כחולה, ואז גררו אותה למיקום המדויק. אפשר להזיז גם סימון אוטומטי וגם סימון ידני.';
     hint.classList.add('success');
-    hint.dataset.vertexEditingHint = 'true';
+    hint.dataset.vertexEditingHintV2 = 'true';
   };
 
   const observer = new MutationObserver(refreshHint);
   observer.observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener('popstate', () => setTimeout(refreshHint, 120));
-  setInterval(refreshHint, 700);
+  setInterval(refreshHint, 500);
   refreshHint();
 }
