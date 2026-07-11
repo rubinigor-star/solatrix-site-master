@@ -33,7 +33,8 @@ const patchState = {
   surfaces: [],
   drawing: false,
   autoDetecting: false,
-  addressResolved: false
+  addressResolved: false,
+  resolvedAddress: ''
 };
 
 function formatNumber(value) { return Math.round(Number(value) || 0).toLocaleString('he-IL'); }
@@ -49,7 +50,16 @@ function getEnteredAddress() {
 function rememberAddress(event) {
   const input = event.target?.closest?.('[data-field="address"]');
   if (!input) return;
-  try { localStorage.setItem(ADDRESS_KEY, String(input.value || '').trim()); } catch {}
+  const nextAddress = String(input.value || '').trim();
+  if (patchState.resolvedAddress && nextAddress !== patchState.resolvedAddress) {
+    patchState.surfaces = [];
+    patchState.currentPoints = [];
+    patchState.drawing = false;
+    patchState.addressResolved = false;
+    patchState.resolvedAddress = '';
+    publishSurfaces();
+  }
+  try { localStorage.setItem(ADDRESS_KEY, nextAddress); } catch {}
 }
 
 function injectStyles() {
@@ -380,6 +390,7 @@ async function autoDetectRoof(panel) {
   }
 
   patchState.autoDetecting = true;
+  patchState.resolvedAddress = address;
   const startButton = panel.querySelector('[data-govmap-action="start"]');
   if (startButton) startButton.disabled = true;
   updateMapText(`מאתרים אוטומטית את קווי המתאר של הבניין בכתובת: ${address}`, false);
