@@ -1,5 +1,5 @@
 html.solatrix-preview-design .visual-stage{position:relative!important;min-height:560px!important;overflow:hidden!important;border-radius:32px!important;background:linear-gradient(145deg,#062840 0%,#0c4a70 58%,#09283d 100%)!important;box-shadow:0 38px 95px rgba(6,40,64,.28)!important;border:1px solid rgba(255,255,255,.5)!important}
-html.solatrix-preview-design .visual-stage>.hero-preview-old{display:none!important}
+html.solatrix-preview-design .visual-stage>:not(.hero-preview-card){display:none!important}
 .hero-preview-card{position:absolute;inset:0;overflow:hidden;border-radius:inherit;color:#fff;font-family:Assistant,system-ui,sans-serif}
 .hero-preview-card:before{content:"";position:absolute;inset:0;background:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px),radial-gradient(circle at 82% 12%,rgba(247,183,25,.38),transparent 24%);background-size:34px 34px,34px 34px,auto}
 .hero-preview-top{position:relative;z-index:3;display:flex;justify-content:space-between;align-items:center;padding:20px 22px;border-bottom:1px solid rgba(255,255,255,.1);font-weight:900}
