@@ -91,11 +91,18 @@ function injectSolatrixScripts() {
         ? stripUnwantedHomepageSections(html)
         : html;
       const homepageTags = homepage
-        ? [{
-            tag: 'script',
-            attrs: { type: 'module', src: './src/homeVisualRefresh.js' },
-            injectTo: 'head'
-          }]
+        ? [
+            {
+              tag: 'script',
+              attrs: { type: 'module', src: './src/homeVisualRefresh.js' },
+              injectTo: 'head'
+            },
+            {
+              tag: 'script',
+              attrs: { type: 'module', src: './src/homeVisualTargetFix.js' },
+              injectTo: 'body'
+            }
+          ]
         : [];
 
       if ([...SITE_WIDE_SCRIPT_SKIP].some((page) => filename.endsWith(page))) {
