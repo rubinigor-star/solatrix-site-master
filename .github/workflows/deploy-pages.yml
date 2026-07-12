@@ -43,7 +43,7 @@ jobs:
           npm install
           npm run build
 
-      - name: Build preview
+      - name: Build preview with direct hero injection
         working-directory: preview-source
         run: |
           npm install
@@ -57,6 +57,7 @@ jobs:
           cp -a preview-source/dist/. site/preview/
           test -f site/index.html
           test -f site/preview/index.html
+          grep -q "hero-preview-card" site/preview/index.html
           touch site/.nojekyll
 
       - name: Configure GitHub Pages
