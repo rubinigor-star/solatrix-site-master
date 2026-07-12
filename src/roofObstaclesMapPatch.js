@@ -1,4 +1,4 @@
-const PATCH_ID = 'solatrix-obstacles-real-map-v1';
+const PATCH_ID = 'solatrix-obstacles-real-map-v2';
 const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
 const activeMaps = [];
@@ -34,8 +34,9 @@ function addStyles() {
   style.id = `${PATCH_ID}-style`;
   style.textContent = `
     .mapPanel.solatrixObstaclesRealMap{
-      height:clamp(330px,46vh,560px);
-      min-height:330px;
+      position:relative;
+      height:clamp(360px,52vh,590px);
+      min-height:360px;
       background:#ded6cc;
       border-radius:28px;
       overflow:hidden;
@@ -72,17 +73,24 @@ function addStyles() {
     .mapPanel.solatrixObstaclesRealMap .leaflet-control-attribution{font-size:9px}
     @media(max-width:760px){
       .mapScreen .mapCard{padding-top:24px}
-      .mapPanel.solatrixObstaclesRealMap{height:390px;min-height:390px;border-radius:22px}
+      .mapPanel.solatrixObstaclesRealMap{height:430px;min-height:430px;border-radius:22px}
       .solatrixObstaclesMapBadge{top:10px;right:10px;font-size:13px;padding:9px 12px}
     }
   `;
   document.head.appendChild(style);
 }
 
+function clearStaleMobileEditor() {
+  document.body.classList.remove('solatrixMobileTargetActive', 'solatrixTargetDrawing');
+  document.querySelector('.solatrixMobileTargetDock')?.remove();
+  document.documentElement.style.removeProperty('--solatrix-mobile-editor-top');
+}
+
 function cleanupDetachedMaps() {
   for (let index = activeMaps.length - 1; index >= 0; index -= 1) {
     const item = activeMaps[index];
     if (item.container.isConnected) continue;
+    try { item.resizeObserver?.disconnect?.(); } catch {}
     try { item.map.remove(); } catch {}
     activeMaps.splice(index, 1);
   }
@@ -101,6 +109,7 @@ function readSurfaces() {
 
 async function installRealMap() {
   if (!(window.location.pathname || '').includes('/obstacles')) return;
+  clearStaleMobileEditor();
   cleanupDetachedMaps();
 
   const panel = document.querySelector('.mapScreen .mapPanel:not(.interactiveMap)');
@@ -129,9 +138,9 @@ async function installRealMap() {
       zoomControl: true,
       attributionControl: true,
       maxZoom: 21,
-      doubleClickZoom: false
+      doubleClickZoom: false,
+      zoomSnap: 0.25
     });
-    activeMaps.push({ map, container: mapContainer });
 
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 21,
@@ -152,8 +161,34 @@ async function installRealMap() {
     });
 
     const bounds = L.latLngBounds(allPoints);
-    map.fitBounds(bounds.pad(0.28), { maxZoom: 20 });
-    setTimeout(() => map.invalidateSize(), 120);
+    let focusPass = 0;
+    const focusRoof = () => {
+      if (!panel.isConnected || !bounds.isValid()) return;
+      map.invalidateSize({ animate: false, pan: false });
+      map.fitBounds(bounds, {
+        paddingTopLeft: [42, 58],
+        paddingBottomRight: [42, 42],
+        maxZoom: 20,
+        animate: false
+      });
+      focusPass += 1;
+    };
+
+    const resizeObserver = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => {
+          if (focusPass < 4) requestAnimationFrame(focusRoof);
+        })
+      : null;
+    resizeObserver?.observe(panel);
+    activeMaps.push({ map, container: mapContainer, resizeObserver });
+
+    requestAnimationFrame(focusRoof);
+    setTimeout(focusRoof, 120);
+    setTimeout(focusRoof, 420);
+    setTimeout(() => {
+      focusRoof();
+      resizeObserver?.disconnect();
+    }, 900);
   } catch (error) {
     console.warn('Solatrix obstacles map failed', error);
     panel.innerHTML = '<div class="solatrixObstaclesMapEmpty">המפה לא נטענה. אפשר עדיין לבחור את הפריטים שנמצאים על הגג ולהמשיך.</div>';
@@ -167,9 +202,10 @@ function tick() {
 const pushState = history.pushState;
 history.pushState = function (...args) {
   const result = pushState.apply(this, args);
-  setTimeout(tick, 100);
+  setTimeout(tick, 60);
   return result;
 };
-window.addEventListener('popstate', () => setTimeout(tick, 100));
-setInterval(tick, 650);
+window.addEventListener('popstate', () => setTimeout(tick, 60));
+window.addEventListener('resize', () => setTimeout(tick, 80));
+setInterval(tick, 500);
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick); else tick();
