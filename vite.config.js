@@ -92,8 +92,8 @@ function injectSolatrixScripts() {
         : html;
       const homepageTags = homepage
         ? [{
-            tag: 'link',
-            attrs: { rel: 'stylesheet', href: './src/homeVisualRefresh.css' },
+            tag: 'script',
+            attrs: { type: 'module', src: './src/homeVisualRefresh.js' },
             injectTo: 'head'
           }]
         : [];
