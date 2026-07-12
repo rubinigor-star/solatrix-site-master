@@ -173,9 +173,37 @@ function connectRoofCheckLinks() {
   });
 }
 
+function mountHeroRoofPhoto() {
+  if (!isHomePage()) return;
+  const map = document.querySelector('.hero-preview-map');
+  if (!map || map.querySelector('.hero-real-photo')) return;
+
+  const photo = document.createElement('img');
+  photo.className = 'hero-real-photo';
+  photo.alt = 'בית עם מערכת סולארית על הגג';
+  photo.decoding = 'async';
+  photo.loading = 'eager';
+  photo.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;z-index:0;filter:saturate(.9) contrast(1.04) brightness(.78);';
+
+  const sources = [
+    'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-approved-hero-image.jpg',
+    'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-hero-real-home-v33.jpg',
+    'https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=1600&q=85'
+  ];
+  let sourceIndex = 0;
+  photo.onerror = () => {
+    sourceIndex += 1;
+    if (sourceIndex < sources.length) photo.src = sources[sourceIndex];
+  };
+  photo.src = sources[sourceIndex];
+
+  map.prepend(photo);
+}
+
 function initSolatrixSiteLinks() {
   removeRedundantHomepageSections();
   connectRoofCheckLinks();
+  mountHeroRoofPhoto();
 }
 
 if (document.readyState === 'loading') {
