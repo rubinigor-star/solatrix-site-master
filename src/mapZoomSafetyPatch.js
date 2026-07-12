@@ -1,7 +1,7 @@
-const PATCH_FLAG = '__solatrixMapZoomSafetyInstalledV1';
+const PATCH_FLAG = '__solatrixMapZoomSafetyInstalledV2';
 const ESRI_IMAGERY_PART = 'World_Imagery/MapServer/tile';
-const NATIVE_IMAGERY_ZOOM = 19;
-const DISPLAY_MAX_ZOOM = 21;
+const LAST_RELIABLE_NATIVE_ZOOM = 18;
+const DISPLAY_MAX_ZOOM = 20;
 
 if (!window[PATCH_FLAG]) {
   window[PATCH_FLAG] = true;
@@ -44,8 +44,8 @@ function installLeafletHook() {
 }
 
 function patchLeaflet(L) {
-  if (!L || L.__solatrixMapZoomSafetyPatched) return;
-  L.__solatrixMapZoomSafetyPatched = true;
+  if (!L || L.__solatrixMapZoomSafetyPatchedV2) return;
+  L.__solatrixMapZoomSafetyPatchedV2 = true;
 
   const originalMapFactory = L.map;
   L.map = function (...args) {
@@ -54,11 +54,14 @@ function patchLeaflet(L) {
       ...options,
       maxZoom: Math.min(Number(options.maxZoom || DISPLAY_MAX_ZOOM), DISPLAY_MAX_ZOOM),
       zoomSnap: options.zoomSnap ?? 0.25,
-      zoomDelta: options.zoomDelta ?? 0.5
+      zoomDelta: options.zoomDelta ?? 0.5,
+      bounceAtZoomLimits: false
     });
 
     map.on('zoomend', () => {
-      if (map.getZoom() > DISPLAY_MAX_ZOOM) map.setZoom(DISPLAY_MAX_ZOOM, { animate: false });
+      if (map.getZoom() > DISPLAY_MAX_ZOOM) {
+        map.setZoom(DISPLAY_MAX_ZOOM, { animate: false });
+      }
     });
     return map;
   };
@@ -69,26 +72,30 @@ function patchLeaflet(L) {
     const safeOptions = isSatellite
       ? {
           ...options,
-          maxNativeZoom: Math.min(Number(options.maxNativeZoom || NATIVE_IMAGERY_ZOOM), NATIVE_IMAGERY_ZOOM),
+          maxNativeZoom: LAST_RELIABLE_NATIVE_ZOOM,
           maxZoom: DISPLAY_MAX_ZOOM,
-          keepBuffer: Math.max(Number(options.keepBuffer || 0), 4),
+          keepBuffer: Math.max(Number(options.keepBuffer || 0), 5),
           updateWhenZooming: false,
-          updateWhenIdle: true
+          updateWhenIdle: true,
+          noWrap: true
         }
       : options;
 
     const layer = originalTileLayerFactory.call(this, url, safeOptions);
     if (!isSatellite) return layer;
 
-    let tileErrors = 0;
-    layer.on('tileload', () => { tileErrors = Math.max(0, tileErrors - 1); });
+    let consecutiveErrors = 0;
+    layer.on('tileload', () => {
+      consecutiveErrors = 0;
+    });
     layer.on('tileerror', () => {
-      tileErrors += 1;
+      consecutiveErrors += 1;
       const map = layer._map;
-      if (!map || tileErrors < 3) return;
-      tileErrors = 0;
-      const safeZoom = Math.min(map.getZoom(), NATIVE_IMAGERY_ZOOM);
-      if (map.getZoom() > safeZoom) map.setZoom(safeZoom, { animate: false });
+      if (!map || consecutiveErrors < 2) return;
+      consecutiveErrors = 0;
+      if (map.getZoom() > LAST_RELIABLE_NATIVE_ZOOM) {
+        map.setZoom(LAST_RELIABLE_NATIVE_ZOOM, { animate: false });
+      }
     });
 
     return layer;
