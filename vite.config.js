@@ -95,16 +95,11 @@ function stripUnwantedHomepageSections(html) {
 }
 
 function injectHeroPreview(html) {
-  const visualStagePattern = /(<div\s+class=["'][^"']*\bvisual-stage\b[^"']*["'][^>]*>)/i;
-  if (!visualStagePattern.test(html)) return html;
-
-  return html.replace(
-    visualStagePattern,
-    `$1<div class="hero-preview-old">${HERO_PREVIEW_MARKUP}`
-  ).replace(
-    /(<div\s+class=["']hero-preview-old["']>)([\s\S]*?)(<\/div>\s*<\/div>)/i,
-    (_, open, oldContent, close) => `${open}${oldContent}</div>${HERO_PREVIEW_MARKUP}${close}`
-  );
+  const openingTag = /(<div\s+class=["'][^"']*\bvisual-stage\b[^"']*["'][^>]*>)/i;
+  if (!openingTag.test(html)) {
+    throw new Error('Homepage visual-stage container was not found');
+  }
+  return html.replace(openingTag, `$1${HERO_PREVIEW_MARKUP}`);
 }
 
 function isHomepageFile(filename) {
