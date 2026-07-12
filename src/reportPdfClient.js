@@ -44,6 +44,7 @@ export async function blobToBase64(blob) {
 
 function buildReportMarkup(customer, reportData) {
   const calculation = reportData.calculation || {};
+  const model = reportData.calculationModel || {};
   const roof = reportData.roofData || {};
   const entries = Object.entries(calculation);
   const keyMetrics = entries.slice(0, 8);
@@ -51,6 +52,12 @@ function buildReportMarkup(customer, reportData) {
   const obstacles = Array.isArray(roof.obstacles) ? roof.obstacles : [];
   const totalArea = surfaces.reduce((sum, surface) => sum + Number(surface?.area || 0), 0);
   const generatedAt = new Date().toLocaleString('he-IL');
+  const tariffText = model.isCommercial
+    ? '₪0.40 קבוע לקוט״ש למשך 25 שנה'
+    : '₪0.48 לקוט״ש שנמכר + עליית 4% לערך הצריכה העצמית';
+  const urbanText = model.urbanEligible
+    ? `כן — תוספת ₪0.06 לקוט״ש ב-10 השנים הראשונות${model.urbanLocality ? ` (${model.urbanLocality})` : ''}`
+    : 'לא חושבה תוספת אורבנית';
 
   return `
   <style>
@@ -75,9 +82,9 @@ function buildReportMarkup(customer, reportData) {
   <section class="pdfPage">${header('נתוני החישוב')}
     <h2 class="pdfSectionTitle">המספרים מאחורי ההערכה</h2>
     <div class="pdfTable">${entries.map(([label,value])=>row(label,value)).join('') || row('נתוני החישוב','נשמרו במערכת')}</div>
-    <div class="pdfNotice">הערכים מבוססים על פרטי הגג והחשבון שהוזנו. הצללות, כיווני גג, מגבלות חיבור, מצב לוח החשמל ותנאי המבנה עשויים להשפיע על התוצאה הסופית.</div>
-    <h2 class="pdfSectionTitle" style="font-size:28px">נתוני גג</h2>
-    <div class="pdfFacts"><div class="pdfFact"><span>מספר משטחים</span><b>${surfaces.length || '—'}</b></div><div class="pdfFact"><span>מכשולים שסומנו</span><b>${escapeHtml(obstacles.join(', ') || 'לא סומנו')}</b></div><div class="pdfFact"><span>חשבון חודשי</span><b>${roof.monthlyBill ? `₪${formatNumber(roof.monthlyBill)}` : '—'}</b></div><div class="pdfFact"><span>מספר WhatsApp</span><b>${escapeHtml(customer.phone || '—')}</b></div></div>
+    <div class="pdfNotice"><b>מודל תעריף:</b> ${escapeHtml(tariffText)}.<br><b>תוספת אורבנית:</b> ${escapeHtml(urbanText)}.</div>
+    <h2 class="pdfSectionTitle" style="font-size:28px">נתוני גג ותעריף</h2>
+    <div class="pdfFacts"><div class="pdfFact"><span>סוג גג</span><b>${escapeHtml(model.isCommercial ? 'מסחרי' : 'ביתי')}</b></div><div class="pdfFact"><span>תוספת אורבנית</span><b>${escapeHtml(model.urbanEligible ? 'כן' : 'לא')}</b></div><div class="pdfFact"><span>חשבון חודשי</span><b>${roof.monthlyBill ? `₪${formatNumber(roof.monthlyBill)}` : '—'}</b></div><div class="pdfFact"><span>מספר WhatsApp</span><b>${escapeHtml(customer.phone || '—')}</b></div></div>
     ${footer('2')}
   </section>
   <section class="pdfPage">${header('השלבים הבאים')}
