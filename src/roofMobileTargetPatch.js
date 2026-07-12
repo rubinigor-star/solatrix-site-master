@@ -1,13 +1,13 @@
-const PATCH_ID = 'solatrix-mobile-target-roof-v1';
+const PATCH_ID = 'solatrix-mobile-target-roof-v2';
 const MOBILE_QUERY = '(max-width: 760px) and (pointer: coarse)';
+const BLOCKED_MAP_APIS = ['nominatim.openstreetmap.org/search', 'overpass-api.de/api/interpreter', 'overpass.kumi.systems/api/interpreter'];
 
 const mobileState = {
   map: null,
   panel: null,
   selected: null,
-  clickGateInstalled: false,
-  rebuilding: false,
-  allowSyntheticPoint: false
+  allowSyntheticPoint: false,
+  autoStarted: false
 };
 
 function isMobileMode() {
@@ -30,6 +30,21 @@ function mapInstance() {
   return window.__solatrixLeafletMap || null;
 }
 
+function disableAutomaticDetectionOnMobile() {
+  if (window.__solatrixMobileFetchGuardInstalled) return;
+  window.__solatrixMobileFetchGuardInstalled = true;
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = function guardedFetch(input, init) {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    const shouldBlock = isMobileMode() && isRoofMarkingPage() && BLOCKED_MAP_APIS.some((part) => url.includes(part));
+    if (shouldBlock) return Promise.reject(new Error('Automatic roof detection is disabled in mobile target mode'));
+    return originalFetch(input, init);
+  };
+}
+
+disableAutomaticDetectionOnMobile();
+
 function addStyles() {
   if (document.getElementById(`${PATCH_ID}-style`)) return;
   const style = document.createElement('style');
@@ -37,9 +52,9 @@ function addStyles() {
   style.textContent = `
     @media(max-width:760px) and (pointer:coarse){
       .solatrixRealMapWrap.mobileTargetMode{height:calc(100svh - 190px);min-height:520px;border-radius:22px}
-      .solatrixRealMapWrap.mobileTargetMode .solatrixMapToolbar{display:none!important}
-      .solatrixRealMapWrap.mobileTargetMode .solatrixMapHint{display:none!important}
-      .solatrixRealMapWrap.mobileTargetMode .solatrixMapSurfaceList{top:12px;left:12px;max-width:170px;z-index:5}
+      .solatrixRealMapWrap.mobileTargetMode .solatrixMapToolbar,
+      .solatrixRealMapWrap.mobileTargetMode .solatrixMapHint,
+      .solatrixRealMapWrap.mobileTargetMode .solatrixMapSurfaceList{display:none!important}
       .solatrixMobileTargetCrosshair{position:absolute;z-index:6;left:50%;top:50%;width:58px;height:58px;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 4px 8px rgba(0,0,0,.28))}
       .solatrixMobileTargetCrosshair:before,.solatrixMobileTargetCrosshair:after{content:"";position:absolute;background:#fff;border:2px solid #0b6fff;border-radius:999px}
       .solatrixMobileTargetCrosshair:before{width:58px;height:4px;left:0;top:27px}
@@ -68,6 +83,10 @@ function formatArea(value) {
   return `${Math.round(Number(value) || 0).toLocaleString('he-IL')} מ״ר`;
 }
 
+function existingButton(action) {
+  return document.querySelector(`[data-govmap-action="${action}"]`);
+}
+
 function ensureUi() {
   if (!isMobileMode() || !isRoofMarkingPage()) return;
   const wrap = document.querySelector('.solatrixRealMapWrap');
@@ -92,6 +111,7 @@ function ensureUi() {
   }
 
   installClickGate(map);
+  startManualModeWhenReady();
   renderControls();
 }
 
@@ -112,7 +132,14 @@ function installClickGate(map) {
     }
   });
   map.__solatrixMobileTargetClickGate = true;
-  mobileState.clickGateInstalled = true;
+}
+
+function startManualModeWhenReady() {
+  if (mobileState.autoStarted || surfaces().length || isDrawing()) return;
+  const start = existingButton('start');
+  if (!start || start.disabled) return;
+  mobileState.autoStarted = true;
+  start.click();
 }
 
 function setStatus(text, badge = '') {
@@ -133,9 +160,8 @@ function setButtons(items) {
 function renderControls() {
   if (!mobileState.panel?.isConnected) return;
   const currentSurfaces = surfaces();
-  const drawing = isDrawing();
 
-  if (drawing) {
+  if (isDrawing()) {
     setStatus('הזיזו את המפה עד שהכוונת נמצאת בדיוק על הפינה, ואז הוסיפו נקודה.', currentSurfaces.length ? formatArea(totalArea()) : '');
     setButtons([
       { action: 'add', label: 'הוספת נקודה +', className: 'primary' },
@@ -165,14 +191,8 @@ function renderControls() {
     return;
   }
 
-  setStatus('הזיזו את המפה אל הגג ולחצו להתחלת סימון באמצעות הכוונת.', '');
-  setButtons([
-    { action: 'start', label: 'התחל סימון', className: 'primary wide' }
-  ]);
-}
-
-function existingButton(action) {
-  return document.querySelector(`[data-govmap-action="${action}"]`);
+  setStatus('הזיזו את המפה אל הגג והוסיפו נקודות באמצעות הכוונת.', '');
+  setButtons([{ action: 'start', label: 'התחל סימון', className: 'primary wide' }]);
 }
 
 function firePointAtCenter() {
@@ -198,9 +218,7 @@ function nearestVertexToCenter() {
     (surface.latlngs || []).forEach((point, pointIndex) => {
       const pixel = map.latLngToContainerPoint([point.lat, point.lng]);
       const distance = centerPoint.distanceTo(pixel);
-      if (!nearest || distance < nearest.distance) {
-        nearest = { surfaceIndex, pointIndex, distance, serial };
-      }
+      if (!nearest || distance < nearest.distance) nearest = { surfaceIndex, pointIndex, distance, serial };
       serial += 1;
     });
   });
@@ -221,8 +239,7 @@ function selectNearestVertex() {
 
   mobileState.selected = nearest;
   clearSelectedHighlight();
-  const markers = document.querySelectorAll('.solatrixRoofPoint');
-  markers[nearest.serial]?.classList.add('mobileTargetSelected');
+  document.querySelectorAll('.solatrixRoofPoint')[nearest.serial]?.classList.add('mobileTargetSelected');
   renderControls();
 }
 
@@ -237,18 +254,16 @@ function rebuildSurfaces(snapshot) {
   const finish = existingButton('finish');
   if (!map || !clear || !start || !finish) return;
 
-  mobileState.rebuilding = true;
   clear.click();
   snapshot.filter((points) => points.length >= 3).forEach((points) => {
     start.click();
     points.forEach((point) => {
       mobileState.allowSyntheticPoint = true;
-      try { map.fire('click', { latlng: map.options.crs ? window.L.latLng(point.lat, point.lng) : point, solatrixTargetPoint: true }); }
+      try { map.fire('click', { latlng: window.L.latLng(point.lat, point.lng), solatrixTargetPoint: true }); }
       finally { mobileState.allowSyntheticPoint = false; }
     });
     finish.click();
   });
-  mobileState.rebuilding = false;
   setTimeout(renderControls, 90);
 }
 
@@ -260,7 +275,6 @@ function moveSelectedVertex() {
   if (!target) return;
   target.lat = point.lat;
   target.lng = point.lng;
-
   mobileState.selected = null;
   clearSelectedHighlight();
   rebuildSurfaces(snapshot);
@@ -276,34 +290,16 @@ function startFreshDrawing() {
 
 function handleAction(action) {
   switch (action) {
-    case 'start':
-      existingButton('start')?.click();
-      break;
-    case 'add':
-      firePointAtCenter();
-      break;
-    case 'finish':
-      existingButton('finish')?.click();
-      break;
-    case 'undo':
-      existingButton('undo')?.click();
-      break;
+    case 'start': existingButton('start')?.click(); break;
+    case 'add': firePointAtCenter(); break;
+    case 'finish': existingButton('finish')?.click(); break;
+    case 'undo': existingButton('undo')?.click(); break;
     case 'cancel-drawing':
-    case 'redraw':
-      startFreshDrawing();
-      break;
-    case 'select-nearest':
-      selectNearestVertex();
-      return;
-    case 'move-selected':
-      moveSelectedVertex();
-      return;
-    case 'cancel-select':
-      mobileState.selected = null;
-      clearSelectedHighlight();
-      break;
-    default:
-      return;
+    case 'redraw': startFreshDrawing(); break;
+    case 'select-nearest': selectNearestVertex(); return;
+    case 'move-selected': moveSelectedVertex(); return;
+    case 'cancel-select': mobileState.selected = null; clearSelectedHighlight(); break;
+    default: return;
   }
   setTimeout(renderControls, 70);
 }
@@ -314,6 +310,7 @@ function cleanup() {
   mobileState.selected = null;
   mobileState.panel = null;
   mobileState.map = null;
+  mobileState.autoStarted = false;
 }
 
 function tick() {
@@ -330,5 +327,5 @@ history.pushState = function (...args) {
 };
 window.addEventListener('popstate', () => setTimeout(tick, 110));
 window.matchMedia(MOBILE_QUERY).addEventListener?.('change', tick);
-setInterval(tick, 550);
+setInterval(tick, 450);
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick); else tick();
