@@ -86,17 +86,26 @@ function injectSolatrixScripts() {
     name: 'solatrix-site-wide-scripts',
     transformIndexHtml(html, context) {
       const filename = String(context?.filename || '').replace(/\\/g, '/');
-      const cleanedHtml = isHomepageFile(filename)
+      const homepage = isHomepageFile(filename);
+      const cleanedHtml = homepage
         ? stripUnwantedHomepageSections(html)
         : html;
+      const homepageTags = homepage
+        ? [{
+            tag: 'script',
+            attrs: { type: 'module', src: './src/homeVisualRefresh.js' },
+            injectTo: 'head'
+          }]
+        : [];
 
       if ([...SITE_WIDE_SCRIPT_SKIP].some((page) => filename.endsWith(page))) {
-        return cleanedHtml;
+        return homepageTags.length ? { html: cleanedHtml, tags: homepageTags } : cleanedHtml;
       }
 
       return {
         html: cleanedHtml,
         tags: [
+          ...homepageTags,
           {
             tag: 'script',
             attrs: { type: 'module', src: './src/siteLinkBridge.js' },
