@@ -6,6 +6,29 @@ const HOMEPAGE_SECTION_TEXTS_TO_REMOVE = [
   'כל גג נראה אחרת'
 ];
 
+const HERO_PREVIEW_MARKUP = `
+  <div class="hero-preview-card" aria-label="הדגמת בדיקת גג סולארית">
+    <div class="hero-preview-top">
+      <span>SOLATRIX ROOF CHECK</span>
+      <span class="hero-preview-status">ניתוח גג פעיל</span>
+    </div>
+    <div class="hero-preview-map">
+      <div class="hero-preview-roof">
+        <div class="hero-preview-panels">
+          ${Array.from({ length: 12 }, () => '<i></i>').join('')}
+        </div>
+      </div>
+      <div class="hero-preview-scan"></div>
+    </div>
+    <div class="hero-preview-badge">✓ התאמה ראשונית נמצאה</div>
+    <div class="hero-preview-stats">
+      <div class="hero-preview-stat"><span>שטח גג</span><b>182 מ״ר</b></div>
+      <div class="hero-preview-stat"><span>גודל מערכת</span><b>28.4 kW</b></div>
+      <div class="hero-preview-stat"><span>ייצור שנתי</span><b>46,900 kWh</b></div>
+      <div class="hero-preview-stat"><span>החזר השקעה</span><b>4.3 שנים</b></div>
+    </div>
+  </div>`;
+
 function normalizeVisibleText(fragment = '') {
   return fragment
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
@@ -37,11 +60,7 @@ function findSectionSpans(html) {
     const opening = stack.pop();
     if (!opening) continue;
 
-    spans.push({
-      start: opening.start,
-      end: tagPattern.lastIndex,
-      openTag: opening.openTag
-    });
+    spans.push({ start: opening.start, end: tagPattern.lastIndex, openTag: opening.openTag });
   }
 
   return spans;
@@ -75,6 +94,14 @@ function stripUnwantedHomepageSections(html) {
   );
 }
 
+function injectHeroPreview(html) {
+  const openingTag = /(<div\s+class=["'][^"']*\bsolatrix-v34-visual\b[^"']*["'][^>]*>)/i;
+  if (!openingTag.test(html)) {
+    throw new Error('Homepage solatrix-v34-visual container was not found');
+  }
+  return html.replace(openingTag, `$1${HERO_PREVIEW_MARKUP}`);
+}
+
 function isHomepageFile(filename) {
   const normalized = filename.replace(/^\.\//, '');
   return normalized === 'index.html'
@@ -86,17 +113,26 @@ function injectSolatrixScripts() {
     name: 'solatrix-site-wide-scripts',
     transformIndexHtml(html, context) {
       const filename = String(context?.filename || '').replace(/\\/g, '/');
-      const cleanedHtml = isHomepageFile(filename)
-        ? stripUnwantedHomepageSections(html)
-        : html;
+      const homepage = isHomepageFile(filename);
+      let cleanedHtml = homepage ? stripUnwantedHomepageSections(html) : html;
+      if (homepage) cleanedHtml = injectHeroPreview(cleanedHtml);
+
+      const homepageTags = homepage
+        ? [{
+            tag: 'script',
+            attrs: { type: 'module', src: './src/heroPreview.js' },
+            injectTo: 'head'
+          }]
+        : [];
 
       if ([...SITE_WIDE_SCRIPT_SKIP].some((page) => filename.endsWith(page))) {
-        return cleanedHtml;
+        return homepageTags.length ? { html: cleanedHtml, tags: homepageTags } : cleanedHtml;
       }
 
       return {
         html: cleanedHtml,
         tags: [
+          ...homepageTags,
           {
             tag: 'script',
             attrs: { type: 'module', src: './src/siteLinkBridge.js' },
