@@ -116,7 +116,10 @@ async function submitWhatsappReport({ offer, reportCard, originalName, originalP
       },
       metadata: {
         whatsappReportRequested: true,
-        recipientPhone: normalizePhone(phone)
+        recipientPhone: normalizePhone(phone),
+        roofType: reportData.roofData.roofType,
+        urbanEligible: reportData.roofData.urbanEligible,
+        urbanLocality: reportData.roofData.urbanLocality
       }
     });
 
@@ -142,12 +145,19 @@ function collectReportData(reportCard, phone) {
     const value = node.querySelector('b, strong')?.textContent?.replace(/\s+/g, ' ').trim() || '';
     if (value) calculation[label] = value;
   });
+
+  const calculationModel = serializableCalculationModel();
   return {
     reportType: 'roof-check',
     calculation,
+    calculationModel,
     roofData: {
-      address: document.querySelector('[data-field="address"]')?.value || '',
-      monthlyBill: document.querySelector('[data-field="monthlyBill"]')?.value || '',
+      address: document.querySelector('[data-field="address"]')?.value || calculationModel?.address || '',
+      monthlyBill: document.querySelector('[data-field="monthlyBill"]')?.value || calculationModel?.monthlyBill || '',
+      roofType: document.querySelector('[data-field="roofType"]')?.value || calculationModel?.roofType || '',
+      urbanEligible: calculationModel?.urbanEligible === true,
+      urbanLocality: calculationModel?.urbanLocality || '',
+      urbanPopulation: calculationModel?.urbanPopulation || null,
       surfaces: Array.isArray(window.__solatrixRoofSurfaces) ? window.__solatrixRoofSurfaces : [],
       obstacles: [...document.querySelectorAll('.obstacle.selected')].map((node) => node.textContent?.replace(/\s+/g, ' ').trim()).filter(Boolean)
     },
@@ -159,9 +169,20 @@ function collectReportData(reportCard, phone) {
       consentTextVersion: 'whatsapp-report-v3',
       consentAt: new Date().toISOString(),
       calculatorVersion: new URLSearchParams(location.search).get('v') || 'roof-check-master-v1',
+      tariffModelVersion: 'home-commercial-urban-v1',
       capturedAt: new Date().toISOString()
     }
   };
+}
+
+function serializableCalculationModel() {
+  try {
+    return window.__solatrixRoofCalculation
+      ? JSON.parse(JSON.stringify(window.__solatrixRoofCalculation))
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function syncOriginalField(field, value) { if (field) { field.value = value; field.dispatchEvent(new Event('input', { bubbles: true })); } }
