@@ -1,11 +1,17 @@
-const PATCH_FLAG = '__solatrixMapZoomSafetyInstalledV2';
+const PATCH_FLAG = '__solatrixMapZoomSafetyInstalledV3';
 const ESRI_IMAGERY_PART = 'World_Imagery/MapServer/tile';
-const LAST_RELIABLE_NATIVE_ZOOM = 18;
-const DISPLAY_MAX_ZOOM = 20;
+const LAST_RELIABLE_NATIVE_ZOOM = 17;
+const DISPLAY_MAX_ZOOM = 19;
+const INITIAL_SAFE_ZOOM = 17;
 
 if (!window[PATCH_FLAG]) {
   window[PATCH_FLAG] = true;
   installLeafletHook();
+}
+
+function isMobileRoofMarking() {
+  const mobile = window.innerWidth <= 820 || (navigator.maxTouchPoints > 0 && window.innerWidth <= 960);
+  return mobile && (window.location.pathname || '').includes('/roof-marking');
 }
 
 function installLeafletHook() {
@@ -44,8 +50,8 @@ function installLeafletHook() {
 }
 
 function patchLeaflet(L) {
-  if (!L || L.__solatrixMapZoomSafetyPatchedV2) return;
-  L.__solatrixMapZoomSafetyPatchedV2 = true;
+  if (!L || L.__solatrixMapZoomSafetyPatchedV3) return;
+  L.__solatrixMapZoomSafetyPatchedV3 = true;
 
   const originalMapFactory = L.map;
   L.map = function (...args) {
@@ -57,6 +63,25 @@ function patchLeaflet(L) {
       zoomDelta: options.zoomDelta ?? 0.5,
       bounceAtZoomLimits: false
     });
+
+    const originalSetView = map.setView.bind(map);
+    const createdAt = Date.now();
+    let userInteracted = false;
+    const container = map.getContainer?.();
+    const markInteraction = () => { userInteracted = true; };
+    container?.addEventListener('pointerdown', markInteraction, { passive: true });
+    container?.addEventListener('touchstart', markInteraction, { passive: true });
+    container?.addEventListener('wheel', markInteraction, { passive: true });
+
+    map.setView = function (center, zoom, setViewOptions) {
+      let safeZoom = zoom;
+      const initialAutomaticMove = !userInteracted && Date.now() - createdAt < 12000;
+      if (isMobileRoofMarking() && initialAutomaticMove && Number(safeZoom) > INITIAL_SAFE_ZOOM) {
+        safeZoom = INITIAL_SAFE_ZOOM;
+      }
+      if (Number(safeZoom) > DISPLAY_MAX_ZOOM) safeZoom = DISPLAY_MAX_ZOOM;
+      return originalSetView(center, safeZoom, setViewOptions);
+    };
 
     map.on('zoomend', () => {
       if (map.getZoom() > DISPLAY_MAX_ZOOM) {
