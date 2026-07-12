@@ -4,7 +4,13 @@ on:
   push:
     branches:
       - main
-      - design/homepage-refresh
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
   workflow_dispatch:
 
 permissions:
@@ -18,6 +24,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'pull_request' || github.head_ref == 'design/homepage-refresh'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout production branch
