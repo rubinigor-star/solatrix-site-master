@@ -95,9 +95,9 @@ function stripUnwantedHomepageSections(html) {
 }
 
 function injectHeroPreview(html) {
-  const openingTag = /(<div\s+class=["'][^"']*\bvisual-stage\b[^"']*["'][^>]*>)/i;
+  const openingTag = /(<div\s+class=["'][^"']*\bsolatrix-v34-visual\b[^"']*["'][^>]*>)/i;
   if (!openingTag.test(html)) {
-    throw new Error('Homepage visual-stage container was not found');
+    throw new Error('Homepage solatrix-v34-visual container was not found');
   }
   return html.replace(openingTag, `$1${HERO_PREVIEW_MARKUP}`);
 }
