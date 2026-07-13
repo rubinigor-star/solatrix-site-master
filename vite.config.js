@@ -1,7 +1,28 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE_WIDE_SCRIPT_SKIP = new Set(['roof-check.html', 'roof-check/index.html', 'admin.html']);
 const HOMEPAGE_SECTION_TEXTS_TO_REMOVE = ['הבעיה היא לא המערכת', 'כל גג נראה אחרת'];
+
+function extractEmbeddedJpeg(sourceRelativePath, outputRelativePath) {
+  const sourcePath = path.join(__dirname, sourceRelativePath);
+  const outputPath = path.join(__dirname, outputRelativePath);
+  const source = fs.readFileSync(sourcePath, 'utf8');
+  const match = source.match(/data:image\/jpeg;base64,([^"']+)/);
+  if (!match) throw new Error(`Embedded JPEG was not found in ${sourceRelativePath}`);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, Buffer.from(match[1], 'base64'));
+}
+
+function prepareHeroAssets() {
+  extractEmbeddedJpeg('assets/solatrix-roof-before-photo.svg', 'public/assets/hero/roof-before.jpg');
+  extractEmbeddedJpeg('assets/solatrix-roof-after-photo.svg', 'public/assets/hero/roof-after.jpg');
+}
+
+prepareHeroAssets();
 
 const HERO_PREVIEW_MARKUP = `
   <div class="hero-preview-card" aria-label="הדגמת בדיקת גג סולארית לפני ואחרי">
@@ -28,8 +49,8 @@ const HERO_PREVIEW_STYLES = `
 .solatrix-v34-visual>:not(.hero-preview-card){display:none!important}
 .hero-preview-card{position:absolute;inset:0;overflow:hidden;border-radius:inherit;color:#fff;font-family:Assistant,system-ui,sans-serif;background:#071c2b;--split:50%}
 .hero-preview-photo,.hero-preview-overlay{position:absolute;left:18px;right:18px;top:68px;bottom:112px;border-radius:20px;background-size:cover;background-position:center;box-shadow:inset 0 0 70px rgba(2,13,20,.28)}
-.hero-preview-photo{background-image:linear-gradient(180deg,rgba(3,18,29,.08),rgba(3,18,29,.25)),url('https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-roof-before-photo.svg')}
-.hero-preview-overlay{background-image:linear-gradient(180deg,rgba(3,18,29,.04),rgba(3,18,29,.2)),url('https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-roof-after-photo.svg');clip-path:inset(0 0 0 var(--split));animation:roofReveal 7s ease-in-out infinite}
+.hero-preview-photo{background-image:linear-gradient(180deg,rgba(3,18,29,.08),rgba(3,18,29,.25)),url('./assets/hero/roof-before.jpg')}
+.hero-preview-overlay{background-image:linear-gradient(180deg,rgba(3,18,29,.04),rgba(3,18,29,.2)),url('./assets/hero/roof-after.jpg');clip-path:inset(0 0 0 var(--split));animation:roofReveal 7s ease-in-out infinite}
 @keyframes roofReveal{0%,100%{clip-path:inset(0 0 0 76%)}50%{clip-path:inset(0 0 0 24%)}}
 .hero-preview-card:before{content:"";position:absolute;z-index:2;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.7),transparent 70%);pointer-events:none}
 .hero-preview-top{position:relative;z-index:6;display:flex;justify-content:space-between;align-items:center;padding:19px 22px;border-bottom:1px solid rgba(255,255,255,.13);font-size:13px;font-weight:900;letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.5)}
