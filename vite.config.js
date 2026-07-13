@@ -13,9 +13,7 @@ const HERO_PREVIEW_MARKUP = `
     </div>
     <div class="hero-preview-before-label">לפני</div>
     <div class="hero-preview-after-label">אחרי</div>
-    <div class="hero-preview-frame">
-      <div class="hero-preview-scan"><span>‹ ›</span></div>
-    </div>
+    <div class="hero-preview-frame"><div class="hero-preview-scan"><span>‹ ›</span></div></div>
     <div class="hero-preview-coordinates">32.0853° N · 34.7818° E</div>
     <div class="hero-preview-stats">
       <div class="hero-preview-stat"><span>שטח גג</span><b>94 מ״ר</b></div>
@@ -30,8 +28,8 @@ const HERO_PREVIEW_STYLES = `
 .solatrix-v34-visual>:not(.hero-preview-card){display:none!important}
 .hero-preview-card{position:absolute;inset:0;overflow:hidden;border-radius:inherit;color:#fff;font-family:Assistant,system-ui,sans-serif;background:#071c2b;--split:50%}
 .hero-preview-photo,.hero-preview-overlay{position:absolute;left:18px;right:18px;top:68px;bottom:112px;border-radius:20px;background-size:cover;background-position:center;box-shadow:inset 0 0 70px rgba(2,13,20,.28)}
-.hero-preview-photo{background-image:linear-gradient(180deg,rgba(3,18,29,.08),rgba(3,18,29,.25)),url('https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-roof-before.svg')}
-.hero-preview-overlay{background-image:linear-gradient(180deg,rgba(3,18,29,.04),rgba(3,18,29,.2)),url('https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-roof-after.svg');clip-path:inset(0 0 0 var(--split));animation:roofReveal 7s ease-in-out infinite}
+.hero-preview-photo{background-image:linear-gradient(180deg,rgba(3,18,29,.08),rgba(3,18,29,.25)),url('https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-roof-before-photo.svg')}
+.hero-preview-overlay{background-image:linear-gradient(180deg,rgba(3,18,29,.04),rgba(3,18,29,.2)),url('https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-roof-after-photo.svg');clip-path:inset(0 0 0 var(--split));animation:roofReveal 7s ease-in-out infinite}
 @keyframes roofReveal{0%,100%{clip-path:inset(0 0 0 76%)}50%{clip-path:inset(0 0 0 24%)}}
 .hero-preview-card:before{content:"";position:absolute;z-index:2;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.7),transparent 70%);pointer-events:none}
 .hero-preview-top{position:relative;z-index:6;display:flex;justify-content:space-between;align-items:center;padding:19px 22px;border-bottom:1px solid rgba(255,255,255,.13);font-size:13px;font-weight:900;letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.5)}
@@ -48,22 +46,9 @@ const HERO_PREVIEW_STYLES = `
 @media(prefers-reduced-motion:reduce){.hero-preview-overlay,.hero-preview-scan{animation:none!important}.hero-preview-overlay{clip-path:inset(0 0 0 50%)}.hero-preview-scan{left:50%}}
 `;
 
-function normalizeVisibleText(fragment = '') {
-  return fragment.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim();
-}
-
-function findSectionSpans(html) {
-  const tagPattern=/<\/?section\b[^>]*>/gi; const stack=[]; const spans=[]; let match;
-  while((match=tagPattern.exec(html))!==null){const tag=match[0];if(!/^<\/section/i.test(tag)){stack.push({start:match.index,openTag:tag});continue;}const opening=stack.pop();if(opening)spans.push({start:opening.start,end:tagPattern.lastIndex,openTag:opening.openTag});}
-  return spans;
-}
-
-function stripUnwantedHomepageSections(html){
-  const spans=findSectionSpans(html);const removals=[];const decision=spans.filter(({openTag})=>/\bid\s*=\s*["']decision["']/i.test(openTag)).sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];if(decision)removals.push(decision);
-  HOMEPAGE_SECTION_TEXTS_TO_REMOVE.forEach(target=>{const section=spans.filter(({start,end})=>normalizeVisibleText(html.slice(start,end)).includes(target)).sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];if(section)removals.push(section);});
-  return [...new Map(removals.map(span=>[`${span.start}:${span.end}`,span])).values()].sort((a,b)=>b.start-a.start).reduce((result,{start,end})=>result.slice(0,start)+result.slice(end),html);
-}
-
+function normalizeVisibleText(fragment = '') {return fragment.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim();}
+function findSectionSpans(html){const tagPattern=/<\/?section\b[^>]*>/gi;const stack=[];const spans=[];let match;while((match=tagPattern.exec(html))!==null){const tag=match[0];if(!/^<\/section/i.test(tag)){stack.push({start:match.index,openTag:tag});continue;}const opening=stack.pop();if(opening)spans.push({start:opening.start,end:tagPattern.lastIndex,openTag:opening.openTag});}return spans;}
+function stripUnwantedHomepageSections(html){const spans=findSectionSpans(html);const removals=[];const decision=spans.filter(({openTag})=>/\bid\s*=\s*["']decision["']/i.test(openTag)).sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];if(decision)removals.push(decision);HOMEPAGE_SECTION_TEXTS_TO_REMOVE.forEach(target=>{const section=spans.filter(({start,end})=>normalizeVisibleText(html.slice(start,end)).includes(target)).sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];if(section)removals.push(section);});return [...new Map(removals.map(span=>[`${span.start}:${span.end}`,span])).values()].sort((a,b)=>b.start-a.start).reduce((result,{start,end})=>result.slice(0,start)+result.slice(end),html);}
 function injectHeroPreview(html){const openingTag=/(<div\s+class=["'][^"']*\bsolatrix-v34-visual\b[^"']*["'][^>]*>)/i;if(!openingTag.test(html))throw new Error('Homepage solatrix-v34-visual container was not found');return html.replace(openingTag,`$1${HERO_PREVIEW_MARKUP}`);}
 function isHomepageFile(filename){const normalized=filename.replace(/^\.\//,'');return normalized==='index.html'||(normalized.endsWith('/index.html')&&!normalized.endsWith('/roof-check/index.html'));}
 function injectSolatrixScripts(){return{name:'solatrix-site-wide-scripts',transformIndexHtml(html,context){const filename=String(context?.filename||'').replace(/\\/g,'/');const homepage=isHomepageFile(filename);let cleanedHtml=homepage?stripUnwantedHomepageSections(html):html;if(homepage)cleanedHtml=injectHeroPreview(cleanedHtml);const homepageTags=homepage?[{tag:'style',children:HERO_PREVIEW_STYLES,injectTo:'head'}]:[];if([...SITE_WIDE_SCRIPT_SKIP].some(page=>filename.endsWith(page)))return homepageTags.length?{html:cleanedHtml,tags:homepageTags}:cleanedHtml;return{html:cleanedHtml,tags:[...homepageTags,{tag:'script',attrs:{type:'module',src:'./src/siteLinkBridge.js'},injectTo:'body'},{tag:'script',attrs:{type:'module',src:'./src/globalLeadForm.js'},injectTo:'body'}]};}};}
