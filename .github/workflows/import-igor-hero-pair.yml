@@ -1,0 +1,45 @@
+name: Import Igor Hero pair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/import-igor-hero-pair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
+      - name: Download approved hero visual
+        run: |
+          mkdir -p public/assets/hero
+          curl -L --fail --retry 3 \
+            'https://media.canva.com/v2/document-image/hash:-185278517/height:404/id:DAHPRXKAUM8/type:B/width:495?brand=BAFxhuAlkIA&csig=AAAAAAAAAAAAAAAAAAAAANBKJQBTweKEv2gEJpAV3TtKvDkbBYxatG4DfVNgBQU4&disableexport=T&exp=1783951872&fallback=https%3A%2F%2Fs3.amazonaws.com%2Fdocument-export.canva.com%2FKAUM8%2FDAHPRXKAUM8%2F1%2Fthumbnail%2F0001.png%3FX-Amz-Algorithm%3DAWS4-HMAC-SHA256%26X-Amz-Credential%3DAKIAQYCGKMUHXSTDDERN%252F20260713%252Fus-east-1%252Fs3%252Faws4_request%26X-Amz-Date%3D20260713T014544Z%26X-Amz-Expires%3D44728%26X-Amz-Signature%3D01f4a7943b251805d0418d22a90e225e4740cecd727012d0202247ab1fbf3f47%26X-Amz-SignedHeaders%3Dhost%26response-expires%3DMon%252C%252013%2520Jul%25202026%252014%253A11%253A12%2520GMT&osig=AAAAAAAAAAAAAAAAAAAAAFJv5Zch5Ap-noNDi9PTDVk2f07JVeuFFKbp59EFzEio&page=1&signed=brand%2Cdisableexport%2Cfallback%2Cpage%2Cversion&signer=document-rpc&version=1' \
+            -o /tmp/igor-hero-pair.png
+
+      - name: Create matched before and after roof images
+        run: |
+          convert /tmp/igor-hero-pair.png -crop 232x220+10+44 +repage -resize 1200x700^ -gravity center -extent 1200x700 -quality 90 public/assets/hero/igor-before.jpg
+          convert /tmp/igor-hero-pair.png -crop 232x220+253+44 +repage -resize 1200x700^ -gravity center -extent 1200x700 -quality 90 public/assets/hero/igor-after.jpg
+          identify public/assets/hero/igor-before.jpg public/assets/hero/igor-after.jpg
+
+      - name: Commit images
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/assets/hero/igor-before.jpg public/assets/hero/igor-after.jpg
+          git diff --cached --quiet && exit 0
+          git commit -m 'Add approved Igor Hero before and after assets'
+          git push
