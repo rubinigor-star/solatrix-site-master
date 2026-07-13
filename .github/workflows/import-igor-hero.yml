@@ -1,0 +1,36 @@
+name: Import Igor Hero image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/import-igor-hero.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download approved Igor Hero image
+        run: |
+          mkdir -p public/assets/hero
+          curl -L --fail --retry 3 \
+            'https://media.canva.com/v2/document-image/hash:-522601831/height:365/id:DAHPQnxwioo/type:B/width:547?brand=BAFxhuAlkIA&csig=AAAAAAAAAAAAAAAAAAAAAEswCrDriFYvwU7Sw-ugXUJsPBJDJZ5Ou1HYWnuf1M9c&disableexport=T&exp=1783943972&fallback=https%3A%2F%2Fs3.amazonaws.com%2Fdocument-export.canva.com%2Fxwioo%2FDAHPQnxwioo%2F1%2Fthumbnail%2F0001.png%3FX-Amz-Algorithm%3DAWS4-HMAC-SHA256%26X-Amz-Credential%3DAKIAQYCGKMUHXSTDDERN%252F20260712%252Fus-east-1%252Fs3%252Faws4_request%26X-Amz-Date%3D20260712T205042Z%26X-Amz-Expires%3D54530%26X-Amz-Signature%3Dd87af17ce75d4af999c2bc24b8ac0ba7956531ae6d2d4215bf3e9064476032fb%26X-Amz-SignedHeaders%3Dhost%26response-expires%3DMon%252C%252013%2520Jul%25202026%252011%253A59%253A32%2520GMT&osig=AAAAAAAAAAAAAAAAAAAAAJU1TSWKhfArDLf-Oa82Hv2gEUcIkd7eJR1mzUTnfURs&page=1&signed=brand%2Cdisableexport%2Cfallback%2Cpage%2Cversion&signer=document-rpc&version=1' \
+            -o public/assets/hero/igor-hero.png
+          file public/assets/hero/igor-hero.png
+          test -s public/assets/hero/igor-hero.png
+
+      - name: Commit image to repository
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/assets/hero/igor-hero.png
+          git diff --cached --quiet && exit 0
+          git commit -m 'Add approved Igor Hero image asset'
+          git push
