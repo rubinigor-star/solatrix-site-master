@@ -200,14 +200,61 @@ function mountHeroRoofPhoto() {
   map.prepend(photo);
 }
 
+function removePersistentContactDock() {
+  const normalize = (value = '') => value.replace(/\s+/g, ' ').trim();
+  const elements = [...document.querySelectorAll('body *')];
+
+  elements.forEach((element) => {
+    if (!(element instanceof HTMLElement)) return;
+    if (element.closest('header, nav')) return;
+
+    const text = normalize(element.innerText || '');
+    if (!text || text.length > 120) return;
+
+    const hasRoof = /בדיקת גג/.test(text);
+    const hasWhatsApp = /whatsapp/i.test(text);
+    const hasCall = /שיחה|התקשר|צור קשר/.test(text);
+    if (!(hasRoof && hasWhatsApp && hasCall)) return;
+
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    const likelyDock =
+      style.position === 'fixed' ||
+      style.position === 'sticky' ||
+      rect.width >= Math.min(window.innerWidth * 0.72, 420) ||
+      element.querySelectorAll('a,button,[role="button"]').length >= 3;
+
+    if (!likelyDock) return;
+
+    element.setAttribute('data-solatrix-removed-contact-dock', 'true');
+    element.remove();
+  });
+}
+
 function initSolatrixSiteLinks() {
+  removePersistentContactDock();
   removeRedundantHomepageSections();
   connectRoofCheckLinks();
   mountHeroRoofPhoto();
 }
 
+let maintenanceQueued = false;
+const maintenanceObserver = new MutationObserver(() => {
+  if (maintenanceQueued) return;
+  maintenanceQueued = true;
+  window.requestAnimationFrame(() => {
+    maintenanceQueued = false;
+    removePersistentContactDock();
+    connectRoofCheckLinks();
+  });
+});
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initSolatrixSiteLinks);
+  document.addEventListener('DOMContentLoaded', () => {
+    initSolatrixSiteLinks();
+    maintenanceObserver.observe(document.body, { childList: true, subtree: true });
+  });
 } else {
   initSolatrixSiteLinks();
+  maintenanceObserver.observe(document.body, { childList: true, subtree: true });
 }
