@@ -13,16 +13,40 @@
 <script>
 (async function bootSolatrix(){
   try {
-    const response = await fetch('./faq.html?v=launch-cleanup-1', { cache: 'no-store' });
+    const response = await fetch('./faq.html?v=launch-cleanup-2', { cache: 'no-store' });
     if (!response.ok) throw new Error('Failed to load site');
 
-    let html = await response.text();
+    const source = await response.text();
+    const parser = new DOMParser();
+    const parsed = parser.parseFromString(source, 'text/html');
+
+    function normalize(value){
+      return (value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function isContactDock(element){
+      if (!(element instanceof HTMLElement)) return false;
+      const text = normalize(element.textContent);
+      if (!text || text.length > 140) return false;
+      const hasRoof = text.includes('בדיקת גג');
+      const hasWhatsApp = /whatsapp/i.test(text);
+      const hasCall = text.includes('שיחה');
+      const actionCount = element.querySelectorAll('a,button,[role="button"]').length;
+      return hasRoof && hasWhatsApp && hasCall && actionCount >= 3;
+    }
+
+    [...parsed.body.querySelectorAll('*')].forEach(function(element){
+      if (isContactDock(element)) element.remove();
+    });
 
     const permanentCleanup = `
       <style id="solatrix-launch-cleanup">
         .mobile-bottom-cta,
         .mobileBottomCta,
-        [class*="mobile-bottom-cta"]{
+        [class*="mobile-bottom-cta"],
+        [class*="bottom-cta"],
+        [class*="contact-dock"],
+        [class*="action-dock"]{
           display:none!important;
           visibility:hidden!important;
           opacity:0!important;
@@ -38,19 +62,34 @@
       </style>
       <script>
         (function(){
+          function normalize(value){return (value||'').replace(/\\s+/g,' ').trim();}
           function removeDock(){
-            document.querySelectorAll('.mobile-bottom-cta,.mobileBottomCta,[class*="mobile-bottom-cta"]').forEach(function(el){el.remove();});
+            document.querySelectorAll('.mobile-bottom-cta,.mobileBottomCta,[class*="mobile-bottom-cta"],[class*="bottom-cta"],[class*="contact-dock"],[class*="action-dock"]').forEach(function(el){el.remove();});
+            Array.prototype.slice.call(document.body.querySelectorAll('*')).forEach(function(el){
+              if(!(el instanceof HTMLElement)) return;
+              var text=normalize(el.textContent);
+              if(!text||text.length>140) return;
+              var match=text.indexOf('בדיקת גג')>-1 && /whatsapp/i.test(text) && text.indexOf('שיחה')>-1;
+              var actions=el.querySelectorAll('a,button,[role="button"]').length;
+              if(match && actions>=3) el.remove();
+            });
             document.body.style.setProperty('padding-bottom','0','important');
+            document.body.style.opacity='1';
           }
           if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',removeDock);
           else removeDock();
-          new MutationObserver(removeDock).observe(document.documentElement,{childList:true,subtree:true});
+          var queued=false;
+          new MutationObserver(function(){
+            if(queued) return;
+            queued=true;
+            requestAnimationFrame(function(){queued=false;removeDock();});
+          }).observe(document.documentElement,{childList:true,subtree:true});
         })();
       <\/script>`;
 
-    html = html.replace('</head>', permanentCleanup + '</head>');
+    parsed.head.insertAdjacentHTML('beforeend', permanentCleanup);
     document.open();
-    document.write(html);
+    document.write('<!doctype html>\n' + parsed.documentElement.outerHTML);
     document.close();
   } catch (error) {
     document.body.style.opacity = '1';
