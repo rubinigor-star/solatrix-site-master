@@ -1,0 +1,1 @@
+Trigger GitHub Pages rebuild for production main after mobile dock removal.
