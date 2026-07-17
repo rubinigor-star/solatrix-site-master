@@ -9,12 +9,15 @@
     <style>
       .visualCard.roofCheckHeroImage {
         position: relative !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        aspect-ratio: 3 / 2 !important;
+        align-self: center !important;
         padding: 0 !important;
         overflow: hidden !important;
         background: #061827 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
+        display: block !important;
       }
       .visualCard.roofCheckHeroImage::before {
         display: none !important;
@@ -29,16 +32,13 @@
         width: 100% !important;
         height: 100% !important;
         object-fit: cover !important;
-        object-position: 50% 54% !important;
+        object-position: center !important;
         border-radius: inherit;
       }
       @media (max-width: 760px) {
         .visualCard.roofCheckHeroImage {
-          aspect-ratio: 3 / 2;
-          min-height: 0 !important;
-        }
-        .roofCheckHeroArtwork {
-          object-position: 50% 52% !important;
+          width: 100% !important;
+          aspect-ratio: 3 / 2 !important;
         }
       }
     </style>
@@ -60,7 +60,7 @@
     <div id="root"></div>
     <script>
       (() => {
-        const IMAGE_URL = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/roof%20check.jpg?v=30f02652';
+        const IMAGE_URL = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/roof%20check%20hero.jpg?v=f31e2e85';
 
         const applyRoofCheckHero = () => {
           const card = document.querySelector('.heroScreen .visualCard');
