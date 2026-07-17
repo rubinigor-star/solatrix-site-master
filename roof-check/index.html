@@ -8,23 +8,43 @@
     <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
       .visualCard.roofCheckHeroImage {
+        position: relative !important;
         padding: 0 !important;
         overflow: hidden !important;
         background: #061827 !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
+        isolation: isolate;
+      }
+      .visualCard.roofCheckHeroImage::before {
+        content: "";
+        position: absolute;
+        inset: -18px;
+        z-index: 0;
+        background: url('https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/roof%20check.jpg?v=30f02652') center / cover no-repeat;
+        filter: blur(14px) brightness(.42);
+        transform: scale(1.06);
+        opacity: .8;
       }
       .visualCard.roofCheckHeroImage > *:not(.roofCheckHeroArtwork) {
         display: none !important;
       }
       .roofCheckHeroArtwork {
+        position: relative;
+        z-index: 1;
         display: block !important;
         width: 100% !important;
         height: 100% !important;
-        object-fit: cover !important;
+        object-fit: contain !important;
         object-position: center !important;
         border-radius: inherit;
+      }
+      @media (max-width: 760px) {
+        .visualCard.roofCheckHeroImage {
+          aspect-ratio: 3 / 2;
+          min-height: 0 !important;
+        }
       }
     </style>
     <script type="module" crossorigin src="../src/roofCheckPublicHeader.js"></script>
