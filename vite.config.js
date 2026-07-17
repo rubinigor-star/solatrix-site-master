@@ -28,8 +28,8 @@ const HERO_PREVIEW_STYLES = `
 .solatrix-v34-visual>:not(.hero-preview-card){display:none!important}
 .hero-preview-card{position:absolute;inset:0;overflow:hidden;border-radius:inherit;color:#fff;font-family:Assistant,system-ui,sans-serif;background:#071c2b}
 .hero-preview-photo{position:absolute;left:18px;right:18px;top:68px;bottom:112px;border-radius:20px;background-size:cover;background-position:center;box-shadow:inset 0 0 70px rgba(2,13,20,.2)}
-.hero-preview-before{background-image:linear-gradient(180deg,rgba(3,18,29,.03),rgba(3,18,29,.16)),url('./assets/hero/igor-before.jpg')}
-.hero-preview-after{background-image:linear-gradient(180deg,rgba(3,18,29,.03),rgba(3,18,29,.16)),url('./assets/hero/igor-after.jpg');clip-path:inset(0 0 0 78%);animation:igorReveal 7s ease-in-out infinite}
+.hero-preview-before{background-image:linear-gradient(180deg,rgba(3,18,29,.03),rgba(3,18,29,.16)),url('./assets/hero/hero%20before.jpg')}
+.hero-preview-after{background-image:linear-gradient(180deg,rgba(3,18,29,.03),rgba(3,18,29,.16)),url('./assets/hero/hero%20after.jpg');clip-path:inset(0 0 0 78%);animation:igorReveal 7s ease-in-out infinite}
 @keyframes igorReveal{0%,100%{clip-path:inset(0 0 0 78%)}50%{clip-path:inset(0 0 0 22%)}}
 .hero-preview-card:before{content:"";position:absolute;z-index:2;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.55),transparent 70%);pointer-events:none}
 .hero-preview-top{position:relative;z-index:6;display:flex;justify-content:space-between;align-items:center;padding:19px 22px;border-bottom:1px solid rgba(255,255,255,.13);font-size:13px;font-weight:900;letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.5)}
