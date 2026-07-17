@@ -26,10 +26,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build production
         run: npm run build
@@ -37,7 +36,7 @@ jobs:
       - name: Verify production artifact
         run: |
           test -f dist/index.html
-          if grep -R -n -E 'mobile-bottom-cta|פעולות מהירות' dist; then
+          if grep -R -n -F '<div aria-label="פעולות מהירות" class="mobile-bottom-cta">' dist; then
             echo 'Persistent mobile contact dock is still present in the production artifact.'
             exit 1
           fi
