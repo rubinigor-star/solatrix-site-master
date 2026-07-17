@@ -40,8 +40,27 @@
         box-shadow: 0 28px 70px rgba(9,35,64,.18) !important;
         isolation: isolate;
       }
-      .visualCard.roofCheckHeroImage::before,
-      .visualCard.roofCheckHeroImage::after { display: none !important; }
+      .visualCard.roofCheckHeroImage::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: -24px !important;
+        display: block !important;
+        background-image: url('https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/hero%20master.jpg?v=69b8ec0c') !important;
+        background-size: cover !important;
+        background-position: center !important;
+        filter: blur(22px) brightness(.62) saturate(.9) !important;
+        transform: scale(1.08) !important;
+        z-index: 0 !important;
+      }
+      .visualCard.roofCheckHeroImage::after {
+        content: "" !important;
+        position: absolute !important;
+        inset: 0 !important;
+        display: block !important;
+        background: linear-gradient(180deg,rgba(3,17,29,.08),rgba(3,17,29,.18)) !important;
+        z-index: 1 !important;
+        pointer-events: none !important;
+      }
       .visualCard.roofCheckHeroImage > *:not(.roofCheckHeroArtwork) { display: none !important; }
       .roofCheckHeroArtwork {
         position: absolute !important;
@@ -166,6 +185,8 @@
           min-height: 0 !important;
           aspect-ratio: 8 / 5 !important;
         }
+        .visualCard.roofCheckHeroImage::before,
+        .visualCard.roofCheckHeroImage::after { display: none !important; }
         .heroScreen .heroCard {
           height: auto !important;
           min-height: 0 !important;
