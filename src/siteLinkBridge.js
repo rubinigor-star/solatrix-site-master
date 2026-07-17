@@ -30,6 +30,23 @@ const contactKeywords = [
   /заяв/i
 ];
 
+function injectGlobalCleanupStyles() {
+  if (document.getElementById('solatrix-global-cleanup-style')) return;
+  const style = document.createElement('style');
+  style.id = 'solatrix-global-cleanup-style';
+  style.textContent = `
+    .mobile-bottom-cta,
+    .mobileBottomCta,
+    [class*="mobile-bottom-cta"]{
+      display:none !important;
+      visibility:hidden !important;
+      pointer-events:none !important;
+    }
+    @media(max-width:980px){body{padding-bottom:0 !important;}}
+  `;
+  document.head.appendChild(style);
+}
+
 function isCalculatorPage() {
   return /\/roof-check\/?$/.test(window.location.pathname) || /\/roof-check\//.test(window.location.pathname);
 }
@@ -112,26 +129,15 @@ function replaceDecisionBlock() {
 
 function removeRedundantHomepageSections() {
   if (!isHomePage()) return;
-
   document.getElementById('decision')?.remove();
-
   const normalize = (value = '') => value.replace(/\s+/g, ' ').trim();
-  const targets = [
-    'הבעיה היא לא המערכת',
-    'כל גג נראה אחרת'
-  ];
-
+  const targets = ['הבעיה היא לא המערכת','כל גג נראה אחרת'];
   targets.forEach((target) => {
     const headings = [...document.querySelectorAll('h1, h2, h3, h4, h5')]
       .filter((heading) => normalize(heading.textContent).includes(target));
-
     headings.forEach((heading) => {
       const section = heading.closest('section');
-      if (section) {
-        section.remove();
-        return;
-      }
-
+      if (section) { section.remove(); return; }
       let block = heading.parentElement;
       while (block?.parentElement && block.parentElement !== document.body && block.parentElement.tagName !== 'MAIN') {
         if (block.getBoundingClientRect().height >= 320 && block.parentElement.children.length > 1) break;
@@ -144,9 +150,7 @@ function removeRedundantHomepageSections() {
 
 function connectRoofCheckLinks() {
   if (isCalculatorPage()) return;
-
   const target = calculatorUrl();
-
   document.querySelectorAll('a').forEach((link) => {
     const label = link.textContent || '';
     const href = link.getAttribute('href') || '';
@@ -158,7 +162,6 @@ function connectRoofCheckLinks() {
       link.setAttribute('data-solatrix-open-lead-form', 'true');
     }
   });
-
   document.querySelectorAll('button, [role="button"]').forEach((button) => {
     const label = button.textContent || '';
     if (textMatches(label)) {
@@ -177,61 +180,29 @@ function mountHeroRoofPhoto() {
   if (!isHomePage()) return;
   const map = document.querySelector('.hero-preview-map');
   if (!map || map.querySelector('.hero-real-photo')) return;
-
   const photo = document.createElement('img');
   photo.className = 'hero-real-photo';
   photo.alt = 'בית עם מערכת סולארית על הגג';
   photo.decoding = 'async';
   photo.loading = 'eager';
   photo.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;z-index:0;filter:saturate(.9) contrast(1.04) brightness(.78);';
-
   const sources = [
     'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-approved-hero-image.jpg',
     'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-hero-real-home-v33.jpg',
     'https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=1600&q=85'
   ];
   let sourceIndex = 0;
-  photo.onerror = () => {
-    sourceIndex += 1;
-    if (sourceIndex < sources.length) photo.src = sources[sourceIndex];
-  };
+  photo.onerror = () => { sourceIndex += 1; if (sourceIndex < sources.length) photo.src = sources[sourceIndex]; };
   photo.src = sources[sourceIndex];
-
   map.prepend(photo);
 }
 
 function removePersistentContactDock() {
-  const normalize = (value = '') => value.replace(/\s+/g, ' ').trim();
-  const elements = [...document.querySelectorAll('body *')];
-
-  elements.forEach((element) => {
-    if (!(element instanceof HTMLElement)) return;
-    if (element.closest('header, nav')) return;
-
-    const text = normalize(element.innerText || '');
-    if (!text || text.length > 120) return;
-
-    const hasRoof = /בדיקת גג/.test(text);
-    const hasWhatsApp = /whatsapp/i.test(text);
-    const hasCall = /שיחה|התקשר|צור קשר/.test(text);
-    if (!(hasRoof && hasWhatsApp && hasCall)) return;
-
-    const rect = element.getBoundingClientRect();
-    const style = window.getComputedStyle(element);
-    const likelyDock =
-      style.position === 'fixed' ||
-      style.position === 'sticky' ||
-      rect.width >= Math.min(window.innerWidth * 0.72, 420) ||
-      element.querySelectorAll('a,button,[role="button"]').length >= 3;
-
-    if (!likelyDock) return;
-
-    element.setAttribute('data-solatrix-removed-contact-dock', 'true');
-    element.remove();
-  });
+  document.querySelectorAll('.mobile-bottom-cta,.mobileBottomCta,[class*="mobile-bottom-cta"]').forEach((element) => element.remove());
 }
 
 function initSolatrixSiteLinks() {
+  injectGlobalCleanupStyles();
   removePersistentContactDock();
   removeRedundantHomepageSections();
   connectRoofCheckLinks();
@@ -244,6 +215,7 @@ const maintenanceObserver = new MutationObserver(() => {
   maintenanceQueued = true;
   window.requestAnimationFrame(() => {
     maintenanceQueued = false;
+    injectGlobalCleanupStyles();
     removePersistentContactDock();
     connectRoofCheckLinks();
   });
