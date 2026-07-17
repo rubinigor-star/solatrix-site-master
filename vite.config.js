@@ -49,7 +49,19 @@ function normalizeVisibleText(fragment = '') {return fragment.replace(/<script\b
 function findSectionSpans(html){const tagPattern=/<\/?section\b[^>]*>/gi;const stack=[];const spans=[];let match;while((match=tagPattern.exec(html))!==null){const tag=match[0];if(!/^<\/section/i.test(tag)){stack.push({start:match.index,openTag:tag});continue;}const opening=stack.pop();if(opening)spans.push({start:opening.start,end:tagPattern.lastIndex,openTag:opening.openTag});}return spans;}
 function stripUnwantedHomepageSections(html){const spans=findSectionSpans(html);const removals=[];const decision=spans.filter(({openTag})=>/\bid\s*=\s*["']decision["']/i.test(openTag)).sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];if(decision)removals.push(decision);HOMEPAGE_SECTION_TEXTS_TO_REMOVE.forEach(target=>{const section=spans.filter(({start,end})=>normalizeVisibleText(html.slice(start,end)).includes(target)).sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];if(section)removals.push(section);});return [...new Map(removals.map(span=>[`${span.start}:${span.end}`,span])).values()].sort((a,b)=>b.start-a.start).reduce((result,{start,end})=>result.slice(0,start)+result.slice(end),html);}
 function fixHomepageCopy(html){return html.replace(/מובילים\s+מובילים/g,'מובילים');}
-function removePersistentMobileDock(html){return html.replace(/\s*<div\s+aria-label=["']פעולות מהירות["']\s+class=["']mobile-bottom-cta["']>[\s\S]*?<\/div>\s*/gi,'\n');}
+function removePersistentMobileDock(html){
+  const opening=/<div\b[^>]*class=["'][^"']*\bmobile-bottom-cta\b[^"']*["'][^>]*>/i.exec(html);
+  if(!opening)return html;
+  let depth=1;
+  const tagPattern=/<\/?div\b[^>]*>/gi;
+  tagPattern.lastIndex=opening.index+opening[0].length;
+  let match;
+  while((match=tagPattern.exec(html))!==null){
+    if(/^<\/div/i.test(match[0]))depth-=1;else depth+=1;
+    if(depth===0)return `${html.slice(0,opening.index)}\n${html.slice(tagPattern.lastIndex)}`;
+  }
+  throw new Error('mobile-bottom-cta opening tag found without matching closing tag');
+}
 function injectHeroPreview(html){const openingTag=/(<div\s+class=["'][^"']*\bsolatrix-v34-visual\b[^"']*["'][^>]*>)/i;if(!openingTag.test(html))return {html,injected:false};return {html:html.replace(openingTag,`$1${HERO_PREVIEW_MARKUP}`),injected:true};}
 function isHomepageFile(filename){const normalized=filename.replace(/^\.\//,'');return normalized==='index.html'||(normalized.endsWith('/index.html')&&!normalized.endsWith('/roof-check/index.html'));}
 function injectSolatrixScripts(){return{name:'solatrix-site-wide-scripts',transformIndexHtml(html,context){const filename=String(context?.filename||'').replace(/\\/g,'/');const homepage=isHomepageFile(filename);let cleanedHtml=removePersistentMobileDock(html);cleanedHtml=homepage?fixHomepageCopy(stripUnwantedHomepageSections(cleanedHtml)):cleanedHtml;let heroInjected=false;if(homepage){const result=injectHeroPreview(cleanedHtml);cleanedHtml=result.html;heroInjected=result.injected;}const homepageTags=homepage&&heroInjected?[{tag:'style',children:HERO_PREVIEW_STYLES,injectTo:'head'}]:[];if([...SITE_WIDE_SCRIPT_SKIP].some(page=>filename.endsWith(page)))return homepageTags.length?{html:cleanedHtml,tags:homepageTags}:cleanedHtml;return{html:cleanedHtml,tags:[...homepageTags,{tag:'script',attrs:{type:'module',src:'./src/siteLinkBridge.js'},injectTo:'body'},{tag:'script',attrs:{type:'module',src:'./src/globalLeadForm.js'},injectTo:'body'}]};}};}
