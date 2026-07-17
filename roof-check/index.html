@@ -50,7 +50,9 @@
         display: block !important;
         width: 100% !important;
         height: 100% !important;
-        object-fit: cover !important;
+        max-width: none !important;
+        transform: none !important;
+        object-fit: contain !important;
         object-position: center !important;
         border-radius: inherit;
       }
@@ -164,7 +166,6 @@
           min-height: 0 !important;
           aspect-ratio: 8 / 5 !important;
         }
-        .roofCheckHeroArtwork { object-fit: contain !important; }
         .heroScreen .heroCard {
           height: auto !important;
           min-height: 0 !important;
