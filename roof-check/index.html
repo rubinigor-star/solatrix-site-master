@@ -7,17 +7,21 @@
     <meta name="description" content="Roof Check by Solatrix — בדיקת גג חכמה לפני התקנת מערכת סולארית." />
     <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+      .heroScreen .heroGrid {
+        align-items: stretch !important;
+      }
       .visualCard.roofCheckHeroImage {
         position: relative !important;
         width: 100% !important;
         height: auto !important;
-        min-height: 0 !important;
-        aspect-ratio: 3 / 2 !important;
-        align-self: center !important;
+        min-height: 100% !important;
+        aspect-ratio: auto !important;
+        align-self: stretch !important;
         padding: 0 !important;
         overflow: hidden !important;
         background: #061827 !important;
         display: block !important;
+        border-radius: 28px !important;
       }
       .visualCard.roofCheckHeroImage::before {
         display: none !important;
@@ -36,8 +40,13 @@
         border-radius: inherit;
       }
       @media (max-width: 760px) {
+        .heroScreen .heroGrid {
+          align-items: initial !important;
+        }
         .visualCard.roofCheckHeroImage {
           width: 100% !important;
+          height: auto !important;
+          min-height: 0 !important;
           aspect-ratio: 3 / 2 !important;
         }
       }
