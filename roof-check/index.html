@@ -9,13 +9,18 @@
     <style>
       .heroScreen .heroGrid {
         align-items: stretch !important;
+        gap: clamp(18px,2vw,28px) !important;
+      }
+      .heroScreen .heroGrid > * {
+        min-height: 0 !important;
+        aspect-ratio: 1.45 / 1 !important;
       }
       .visualCard.roofCheckHeroImage {
         position: relative !important;
         width: 100% !important;
         height: auto !important;
-        min-height: 100% !important;
-        aspect-ratio: auto !important;
+        min-height: 0 !important;
+        aspect-ratio: 1.45 / 1 !important;
         align-self: stretch !important;
         padding: 0 !important;
         overflow: hidden !important;
@@ -25,24 +30,9 @@
         box-shadow: var(--shadow) !important;
         isolation: isolate;
       }
-      .visualCard.roofCheckHeroImage::before {
-        content: "" !important;
-        display: block !important;
-        position: absolute !important;
-        inset: -28px !important;
-        z-index: 0 !important;
-        background: url('https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/hero%20master.jpg?v=69b8ec0c') center / cover no-repeat !important;
-        filter: blur(22px) brightness(.52) saturate(1.08) !important;
-        transform: scale(1.08) !important;
-        opacity: .96 !important;
-      }
+      .visualCard.roofCheckHeroImage::before,
       .visualCard.roofCheckHeroImage::after {
-        content: "" !important;
-        position: absolute !important;
-        inset: 0 !important;
-        z-index: 1 !important;
-        background: linear-gradient(180deg,rgba(4,16,29,.06),rgba(4,16,29,.16)) !important;
-        pointer-events: none !important;
+        display: none !important;
       }
       .visualCard.roofCheckHeroImage > *:not(.roofCheckHeroArtwork) {
         display: none !important;
@@ -54,12 +44,28 @@
         display: block !important;
         width: 100% !important;
         height: 100% !important;
-        object-fit: contain !important;
+        object-fit: cover !important;
         object-position: center !important;
         border-radius: inherit;
       }
       .heroScreen .heroCard {
-        padding-inline: clamp(24px,4vw,42px) !important;
+        padding: clamp(24px,2.6vw,38px) clamp(24px,3vw,42px) !important;
+        justify-content: center !important;
+        overflow: hidden !important;
+      }
+      .heroScreen .heroCard .eyebrow {
+        margin-bottom: 12px !important;
+      }
+      .heroScreen .heroCard h1 {
+        font-size: clamp(48px,4.4vw,72px) !important;
+        line-height: .94 !important;
+        margin: 0 0 16px !important;
+        letter-spacing: -2px !important;
+      }
+      .heroScreen .heroText {
+        font-size: clamp(17px,1.4vw,21px) !important;
+        line-height: 1.35 !important;
+        margin: 0 0 22px !important;
       }
       .heroScreen .featureChips {
         display: grid !important;
@@ -67,11 +73,11 @@
         gap: 10px !important;
         width: 100% !important;
         max-width: 560px !important;
-        margin: -8px auto 26px !important;
+        margin: 0 auto 20px !important;
       }
       .heroScreen .featureChips span {
-        min-height: 72px !important;
-        padding: 12px 10px !important;
+        min-height: 68px !important;
+        padding: 10px 8px !important;
         border-radius: 18px !important;
         background: linear-gradient(180deg,#fffaf0,#fff4dd) !important;
         border: 1px solid rgba(245,161,26,.24) !important;
@@ -79,16 +85,16 @@
         flex-direction: column !important;
         align-items: center !important;
         justify-content: center !important;
-        gap: 7px !important;
+        gap: 6px !important;
         color: #5f431d !important;
         font-size: 14px !important;
-        line-height: 1.2 !important;
+        line-height: 1.15 !important;
         text-align: center !important;
         box-shadow: 0 10px 24px rgba(28,20,12,.05) !important;
       }
       .heroScreen .featureChips svg {
-        width: 22px;
-        height: 22px;
+        width: 21px;
+        height: 21px;
         stroke: #f5a11a;
         stroke-width: 2;
         fill: none;
@@ -98,13 +104,21 @@
       }
       .heroScreen .primaryBtn.large {
         max-width: 460px !important;
-        min-height: 68px !important;
-        font-size: 22px !important;
+        min-height: 62px !important;
+        font-size: 21px !important;
         box-shadow: 0 18px 38px rgba(245,161,26,.32) !important;
       }
       .heroScreen .primaryBtn.large:hover {
         transform: translateY(-2px) !important;
         box-shadow: 0 22px 44px rgba(245,161,26,.38) !important;
+      }
+      @media (max-width: 900px) {
+        .heroScreen .heroGrid > * {
+          aspect-ratio: auto !important;
+        }
+        .visualCard.roofCheckHeroImage {
+          aspect-ratio: 8 / 5 !important;
+        }
       }
       @media (max-width: 760px) {
         .heroScreen .heroGrid {
@@ -115,6 +129,9 @@
           height: auto !important;
           min-height: 0 !important;
           aspect-ratio: 8 / 5 !important;
+        }
+        .heroScreen .heroCard h1 {
+          font-size: clamp(42px,13vw,60px) !important;
         }
         .heroScreen .featureChips {
           grid-template-columns: 1fr !important;
