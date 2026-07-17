@@ -22,6 +22,13 @@ jobs:
       - name: Checkout production
         uses: actions/checkout@v4
 
+      - name: Restore approved homepage source
+        run: |
+          curl -fsSL \
+            https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/a6bba1a/index.html \
+            -o index.html
+          grep -q "solatrix-v34-visual" index.html
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -36,6 +43,7 @@ jobs:
       - name: Verify production artifact
         run: |
           test -f dist/index.html
+          grep -q "hero-preview-card" dist/index.html
           if grep -R -n -F '<div aria-label="פעולות מהירות" class="mobile-bottom-cta">' dist; then
             echo 'Persistent mobile contact dock is still present in the production artifact.'
             exit 1
