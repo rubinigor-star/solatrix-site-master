@@ -1,10 +1,9 @@
-name: Deploy Solatrix site and design preview
+name: Deploy Solatrix production site
 
 on:
   push:
     branches:
       - main
-      - design/homepage-refresh
   workflow_dispatch:
 
 permissions:
@@ -13,52 +12,36 @@ permissions:
   id-token: write
 
 concurrency:
-  group: solatrix-pages
-  cancel-in-progress: false
+  group: solatrix-pages-production
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout production branch
+      - name: Checkout production
         uses: actions/checkout@v4
-        with:
-          ref: main
-          path: production
-
-      - name: Checkout design preview branch
-        uses: actions/checkout@v4
-        with:
-          ref: design/homepage-refresh
-          path: preview-source
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build production
-        working-directory: production
-        run: |
-          npm install
-          npm run build
+        run: npm run build
 
-      - name: Build preview with direct hero injection
-        working-directory: preview-source
+      - name: Verify production artifact
         run: |
-          npm install
-          npm run build
-
-      - name: Assemble Pages site
-        run: |
-          rm -rf site
-          mkdir -p site/preview
-          cp -a production/dist/. site/
-          cp -a preview-source/dist/. site/preview/
-          test -f site/index.html
-          test -f site/preview/index.html
-          grep -q "hero-preview-card" site/preview/index.html
-          touch site/.nojekyll
+          test -f dist/index.html
+          if grep -R -n -E 'mobile-bottom-cta|פעולות מהירות' dist; then
+            echo 'Persistent mobile contact dock is still present in the production artifact.'
+            exit 1
+          fi
+          touch dist/.nojekyll
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -66,7 +49,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: dist
 
   deploy:
     environment:
