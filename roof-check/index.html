@@ -11,14 +11,15 @@
         min-height: calc(100vh - 94px) !important;
         display: flex !important;
         align-items: center !important;
-        padding: clamp(18px,2.2vh,30px) clamp(18px,2.6vw,42px) !important;
+        padding: clamp(14px,1.8vh,24px) clamp(10px,1.25vw,22px) !important;
       }
       .heroScreen .heroGrid {
-        width: min(96vw, 1780px) !important;
+        width: min(98vw, 1900px) !important;
         min-height: clamp(500px, 58vh, 640px) !important;
         margin: 0 auto !important;
         align-items: stretch !important;
-        gap: clamp(16px,1.35vw,24px) !important;
+        gap: clamp(8px,.65vw,12px) !important;
+        grid-template-columns: minmax(0,1fr) minmax(0,1.08fr) !important;
       }
       .heroScreen .heroGrid > * {
         min-height: 0 !important;
@@ -41,9 +42,7 @@
         isolation: isolate;
       }
       .visualCard.roofCheckHeroImage::before,
-      .visualCard.roofCheckHeroImage::after {
-        display: none !important;
-      }
+      .visualCard.roofCheckHeroImage::after { display: none !important; }
       .visualCard.roofCheckHeroImage > *:not(.roofCheckHeroArtwork) { display: none !important; }
       .roofCheckHeroArtwork {
         position: absolute !important;
@@ -142,8 +141,9 @@
       @media (max-width: 1180px) {
         .heroScreen { min-height: auto !important; }
         .heroScreen .heroGrid {
-          width: min(94vw,1100px) !important;
+          width: min(96vw,1100px) !important;
           min-height: 0 !important;
+          grid-template-columns: 1fr 1fr !important;
         }
         .heroScreen .heroGrid > * { height: auto !important; }
         .visualCard.roofCheckHeroImage {
@@ -161,6 +161,7 @@
           width: 100% !important;
           align-items: initial !important;
           gap: 16px !important;
+          grid-template-columns: 1fr !important;
         }
         .visualCard.roofCheckHeroImage {
           width: 100% !important;
@@ -207,30 +208,32 @@
     <script>
       (() => {
         const IMAGE_URL = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/igor%20.jpg?v=2070bec';
+        const HERO_SIGNATURE = 'solar-potential-v4';
         const ICON_SCAN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5"></path><path d="M5.5 9.5V20h13V9.5"></path><path d="M8 14h8"></path><path d="M8 17h8"></path><path d="M4 3h4M4 3v4M20 3h-4M20 3v4"></path></svg>';
         const ICON_FORECAST = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7 15 4-4 3 2 4-6"></path><path d="M16 7h2v2"></path></svg>';
         const ICON_REPORT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v5h5"></path><path d="M9 12h6"></path><path d="M9 16h4"></path><circle cx="17.5" cy="17.5" r="3.5"></circle><path d="M16.2 17.5l.9.9 1.7-1.9"></path></svg>';
+        const CHIPS_HTML = `
+          <span>${ICON_SCAN}<div><b>סריקת הגג</b><small>שטח • שיפוע • כיוון</small></div></span>
+          <span>${ICON_FORECAST}<div><b>תחזית כלכלית</b><small>תפוקה • חיסכון • ROI</small></div></span>
+          <span>${ICON_REPORT}<div><b>דוח מקצועי</b><small>PDF + WhatsApp</small></div></span>`;
 
+        let scheduled = false;
         const applyRoofCheckHero = () => {
+          scheduled = false;
           const card = document.querySelector('.heroScreen .visualCard');
           const hero = document.querySelector('.heroScreen .heroCard');
-          if (!card || !hero) return false;
-          if (hero.dataset.solatrixHeroReady === 'true') return true;
+          if (!card || !hero) return;
 
-          hero.dataset.solatrixHeroReady = 'true';
           card.classList.add('roofCheckHeroImage');
-
           let image = card.querySelector('.roofCheckHeroArtwork');
           if (!image) {
             image = document.createElement('img');
             image.className = 'roofCheckHeroArtwork';
             image.alt = 'Solatrix solar potential assessment report';
             image.loading = 'eager';
-            image.src = IMAGE_URL;
             card.appendChild(image);
-          } else if (image.src !== IMAGE_URL) {
-            image.src = IMAGE_URL;
           }
+          if (image.getAttribute('src') !== IMAGE_URL) image.setAttribute('src', IMAGE_URL);
 
           const eyebrow = hero.querySelector('.eyebrow');
           if (eyebrow && eyebrow.textContent !== 'SOLATRIX AI PLATFORM') eyebrow.textContent = 'SOLATRIX AI PLATFORM';
@@ -243,24 +246,32 @@
           if (description && description.textContent !== descriptionText) description.textContent = descriptionText;
 
           const chips = hero.querySelector('.featureChips');
-          if (chips) {
-            chips.innerHTML = `
-              <span>${ICON_SCAN}<div><b>סריקת הגג</b><small>שטח • שיפוע • כיוון</small></div></span>
-              <span>${ICON_FORECAST}<div><b>תחזית כלכלית</b><small>תפוקה • חיסכון • ROI</small></div></span>
-              <span>${ICON_REPORT}<div><b>דוח מקצועי</b><small>PDF + WhatsApp</small></div></span>`;
+          if (chips && chips.dataset.signature !== HERO_SIGNATURE) {
+            chips.innerHTML = CHIPS_HTML;
+            chips.dataset.signature = HERO_SIGNATURE;
           }
 
           const button = hero.querySelector('.primaryBtn.large');
           if (button && button.textContent !== 'קבלו הערכת פוטנציאל') button.textContent = 'קבלו הערכת פוטנציאל';
-          return true;
+          hero.dataset.solatrixHeroReady = HERO_SIGNATURE;
+        };
+
+        const scheduleApply = () => {
+          if (scheduled) return;
+          scheduled = true;
+          requestAnimationFrame(applyRoofCheckHero);
         };
 
         const root = document.getElementById('root');
-        const observer = new MutationObserver(() => {
-          if (applyRoofCheckHero()) observer.disconnect();
-        });
+        const observer = new MutationObserver(scheduleApply);
         observer.observe(root, { childList: true, subtree: true });
-        if (applyRoofCheckHero()) observer.disconnect();
+        window.addEventListener('popstate', scheduleApply);
+        window.addEventListener('hashchange', scheduleApply);
+        window.addEventListener('pageshow', scheduleApply);
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) scheduleApply();
+        });
+        scheduleApply();
       })();
     </script>
   </body>
