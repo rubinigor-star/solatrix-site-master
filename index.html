@@ -4,96 +4,43 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Solatrix Energy</title>
-  <style>
-    html,body{margin:0;min-height:100%;background:#fffaf1}
-    body{opacity:0;transition:opacity .12s ease}
-  </style>
+  <style>html,body{margin:0;min-height:100%;background:#fffaf1}body{opacity:0}</style>
 </head>
 <body>
 <script>
-(async function bootSolatrix(){
+(async function(){
   try {
-    const response = await fetch('./faq.html?v=launch-cleanup-2', { cache: 'no-store' });
-    if (!response.ok) throw new Error('Failed to load site');
+    const sourceUrl = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/73976df044053599282d8b880b8e4669fe67b1d6/faq.html';
+    const response = await fetch(sourceUrl, { cache: 'no-store' });
+    if (!response.ok) throw new Error('source load failed');
+    let html = await response.text();
 
-    const source = await response.text();
-    const parser = new DOMParser();
-    const parsed = parser.parseFromString(source, 'text/html');
+    html = html.replace(
+      /<div\s+aria-label="פעולות מהירות"\s+class="mobile-bottom-cta">[\s\S]*?<\/div>\s*/i,
+      ''
+    );
 
-    function normalize(value){
-      return (value || '').replace(/\s+/g, ' ').trim();
-    }
-
-    function isContactDock(element){
-      if (!(element instanceof HTMLElement)) return false;
-      const text = normalize(element.textContent);
-      if (!text || text.length > 140) return false;
-      const hasRoof = text.includes('בדיקת גג');
-      const hasWhatsApp = /whatsapp/i.test(text);
-      const hasCall = text.includes('שיחה');
-      const actionCount = element.querySelectorAll('a,button,[role="button"]').length;
-      return hasRoof && hasWhatsApp && hasCall && actionCount >= 3;
-    }
-
-    [...parsed.body.querySelectorAll('*')].forEach(function(element){
-      if (isContactDock(element)) element.remove();
-    });
-
-    const permanentCleanup = `
-      <style id="solatrix-launch-cleanup">
-        .mobile-bottom-cta,
-        .mobileBottomCta,
-        [class*="mobile-bottom-cta"],
-        [class*="bottom-cta"],
-        [class*="contact-dock"],
-        [class*="action-dock"]{
-          display:none!important;
-          visibility:hidden!important;
-          opacity:0!important;
-          pointer-events:none!important;
-          height:0!important;
-          min-height:0!important;
-          max-height:0!important;
-          margin:0!important;
-          padding:0!important;
-          overflow:hidden!important;
-        }
+    html = html.replace('</head>', `
+      <style>
+        .mobile-bottom-cta{display:none!important}
         @media(max-width:980px){body{padding-bottom:0!important}}
       </style>
-      <script>
-        (function(){
-          function normalize(value){return (value||'').replace(/\\s+/g,' ').trim();}
-          function removeDock(){
-            document.querySelectorAll('.mobile-bottom-cta,.mobileBottomCta,[class*="mobile-bottom-cta"],[class*="bottom-cta"],[class*="contact-dock"],[class*="action-dock"]').forEach(function(el){el.remove();});
-            Array.prototype.slice.call(document.body.querySelectorAll('*')).forEach(function(el){
-              if(!(el instanceof HTMLElement)) return;
-              var text=normalize(el.textContent);
-              if(!text||text.length>140) return;
-              var match=text.indexOf('בדיקת גג')>-1 && /whatsapp/i.test(text) && text.indexOf('שיחה')>-1;
-              var actions=el.querySelectorAll('a,button,[role="button"]').length;
-              if(match && actions>=3) el.remove();
-            });
-            document.body.style.setProperty('padding-bottom','0','important');
-            document.body.style.opacity='1';
-          }
-          if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',removeDock);
-          else removeDock();
-          var queued=false;
-          new MutationObserver(function(){
-            if(queued) return;
-            queued=true;
-            requestAnimationFrame(function(){queued=false;removeDock();});
-          }).observe(document.documentElement,{childList:true,subtree:true});
-        })();
-      <\/script>`;
+      </head>`);
 
-    parsed.head.insertAdjacentHTML('beforeend', permanentCleanup);
+    html = html.replace('</body>', `
+      <script>
+        document.querySelectorAll('.mobile-bottom-cta').forEach(function(el){el.remove();});
+        document.body.style.setProperty('padding-bottom','0','important');
+        document.body.style.opacity='1';
+      <\/script>
+      </body>`);
+
     document.open();
-    document.write('<!doctype html>\n' + parsed.documentElement.outerHTML);
+    document.write(html);
     document.close();
   } catch (error) {
-    document.body.style.opacity = '1';
-    document.body.innerHTML = '<main style="font-family:Arial,sans-serif;padding:40px;text-align:center"><h1>Solatrix Energy</h1><p>העמוד נטען מחדש. נסו לרענן.</p></main>';
+    document.body.style.opacity='1';
+    document.body.innerHTML='<main style="padding:40px;text-align:center;font-family:Arial"><h1>Solatrix Energy</h1><p>נא לרענן את העמוד.</p></main>';
   }
 })();
 </script>
