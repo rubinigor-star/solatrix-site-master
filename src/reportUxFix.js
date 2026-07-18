@@ -1,4 +1,5 @@
 import './reportUxFix.css';
+import './reportTypographyPatch.js';
 import { LeadSubmissionError, submitLead } from './lib/leadApi.js';
 import { formatPublicLeadReference } from './lib/publicReference.js';
 import { blobToBase64, createRoofCheckPdf } from './reportPdfClient.js';
