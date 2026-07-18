@@ -1,7 +1,23 @@
 const FONT_LINK_ID = 'solatrix-report-fonts-v1';
 const STYLE_ID = 'solatrix-report-typography-v1';
+const HEEBO_VARIABLE_FONT_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/heebo/Heebo%5Bwght%5D.ttf';
+
+function installPdfFontFetchPatch() {
+  if (window.__solatrixPdfFontFetchPatched) return;
+  window.__solatrixPdfFontFetchPatched = true;
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    const requestUrl = typeof input === 'string' ? input : input?.url || '';
+    if (requestUrl.includes('/ofl/heebo/static/Heebo-Regular.ttf') || requestUrl.includes('/ofl/heebo/static/Heebo-Bold.ttf')) {
+      return nativeFetch(HEEBO_VARIABLE_FONT_URL, init);
+    }
+    return nativeFetch(input, init);
+  };
+}
 
 function installReportFonts() {
+  installPdfFontFetchPatch();
+
   if (!document.getElementById(FONT_LINK_ID)) {
     const preconnect = document.createElement('link');
     preconnect.rel = 'preconnect';
