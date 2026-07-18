@@ -18,20 +18,20 @@ export async function createRoofCheckPdf({ customer = {}, reportData = {} } = {}
     await document.fonts?.ready;
     await waitForImages(host);
     const pages = [...host.querySelectorAll('.pdfPage')];
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: false });
 
     for (let index = 0; index < pages.length; index += 1) {
       const canvas = await html2canvas(pages[index], {
-        scale: 1.7,
+        scale: 3,
         backgroundColor: '#fffaf2',
         useCORS: true,
         logging: false,
         windowWidth: 794,
         windowHeight: 1123
       });
-      const image = canvas.toDataURL('image/jpeg', 0.92);
+      const image = canvas.toDataURL('image/jpeg', 0.98);
       if (index > 0) pdf.addPage('a4', 'portrait');
-      pdf.addImage(image, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+      pdf.addImage(image, 'JPEG', 0, 0, 210, 297, undefined, 'NONE');
     }
 
     pdf.setProperties({
