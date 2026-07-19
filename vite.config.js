@@ -43,7 +43,6 @@ function useUploadedPdfImages() {
 
       patched = patched
         .replace("function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+6.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+12.5,3.4,'normal',C.grey,w-12); }", "function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+5.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+9.5,3.2,'normal',C.grey,w-12); }")
-        .replace("  ltr(pdf,'Solatrix Energy • Roof Check',192,291.5,3.2,'normal',C.grey,'right');", "")
         .replace("pageBase(pdf, 'בדיקת גג סולארית ראשונית', 1, ctx.logo);", "pageBase(pdf, '', 1, ctx.logo);")
         .replace("`${ctx.values.paybackWithVat.toFixed(1)} שנים`", "ctx.values.paybackWithVat.toFixed(1)")
         .replace("rtlText(pdf, title, 60, 19, 4.8, 'bold', [114, 128, 140]);", "if (title) rtlText(pdf, title, 60, 19, 4.8, 'bold', [114, 128, 140]);")
@@ -57,8 +56,22 @@ function useUploadedPdfImages() {
         .replace("187, 230, 4.2", "187, 226, 4.2")
         .replace("gradientBand(pdf, 18, 245, 174, 34", "gradientBand(pdf, 18, 241, 174, 38")
         .replace("monthlyChart(pdf,25,105,160,45,projection.months);\n  ltr(pdf,`Total: ${num(c.v.annualProduction)} kWh`,25,155,3.3,'bold',C.navy,'left');", "monthlyChart(pdf,25,105,160,43,projection.months);\n  round(pdf,25,100,48,7,C.pale,C.border,3); ltr(pdf,`${num(c.v.annualProduction)} kWh`,49,104.7,3.1,'bold',C.navy,'center'); rtl(pdf,'ייצור שנתי',69,104.7,2.6,'normal',C.grey);")
-        .replace("cashflowChart(pdf,25,190,160,37,projection.cashflow,c.v.paybackWithVat);", "cashflowChart(pdf,25,195,160,31,projection.cashflow,c.v.paybackWithVat);")
-        .replace("cashflowChart(pdf,25,191,160,36,projection.cashflow,c.v.paybackWithVat);", "cashflowChart(pdf,25,195,160,31,projection.cashflow,c.v.paybackWithVat);");
+        .replace("cashflowChart(pdf,25,190,160,37,projection.cashflow,c.v.paybackWithVat);", "cashflowChart(pdf,25,202,160,24,projection.cashflow,c.v.paybackWithVat);")
+        .replace("cashflowChart(pdf,25,191,160,36,projection.cashflow,c.v.paybackWithVat);", "cashflowChart(pdf,25,202,160,24,projection.cashflow,c.v.paybackWithVat);")
+        .replace("['תקופת החזר',`${c.v.paybackWithVat.toFixed(1)} שנים`]", "['תקופת החזר',c.v.paybackWithVat.toFixed(1),'שנים']")
+        .replace("cards.forEach((item,i)=>analyticsMetric(pdf,18+i*44.5,49,40.5,24,item[0],item[1]));", "cards.forEach((item,i)=>analyticsMetric(pdf,18+i*44.5,49,40.5,24,item[0],item[1],item[2]||''));");
+
+      patched = patched.replace(/\s*ltr\(pdf,'Solatrix Energy • Roof Check'[^\n]*\);/g, '');
+
+      patched = patched.replace(
+        /function analyticsMetric\(pdf,x,y,w,h,label,value\)\{[^\n]*\}/,
+        `function analyticsMetric(pdf,x,y,w,h,label,value,suffix=''){
+  card(pdf,x,y,w,h,4);
+  rtlCenter(pdf,label,x+w/2,y+8,3.2,'normal',C.grey);
+  ltr(pdf,value,x+w/2,y+18,5.4,'bold',C.navy,'center');
+  if(suffix) rtlCenter(pdf,suffix,x+w/2,y+22,2.6,'normal',C.grey);
+}`
+      );
 
       patched = patched.replace(
         /function monthlyChart\(pdf,x,y,w,h,months\)\{[\s\S]*?\n\}/,
@@ -83,23 +96,24 @@ function useUploadedPdfImages() {
   const min=actualMin*1.12,max=actualMax*1.08,range=Math.max(max-min,1);
   const px=yr=>x+(yr/25)*w,py=v=>y+h-((v-min)/range)*h,zeroY=py(0);
 
-  const infoY=y-11,cellW=50;
-  const info=[
-    ['השקעה ראשונית',money(Math.abs(actualMin))],
-    ['נקודת איזון',payback.toFixed(1)+' שנים'],
-    ['תוצאה לאחר 25 שנה',money(actualMax)]
+  const infoY=y-13,cellW=48,gap=5;
+  const cells=[
+    {label:'השקעה ראשונית',value:money(Math.abs(actualMin)),suffix:''},
+    {label:'נקודת איזון',value:payback.toFixed(1),suffix:'שנים'},
+    {label:'תוצאה לאחר 25 שנה',value:money(actualMax),suffix:''}
   ];
-  info.forEach((item,i)=>{
-    const ix=x+i*55;
-    round(pdf,ix,infoY,cellW,9,C.pale,C.border,3);
-    rtl(pdf,item[0],ix+cellW-4,infoY+3.6,2.15,'bold',C.grey);
-    ltr(pdf,item[1],ix+cellW/2,infoY+7.2,2.7,'bold',C.navy,'center');
+  cells.forEach((item,i)=>{
+    const ix=x+i*(cellW+gap)+1;
+    round(pdf,ix,infoY,cellW,10,C.pale,C.border,3);
+    rtlCenter(pdf,item.label,ix+cellW/2,infoY+3.7,2.15,'bold',C.grey);
+    ltr(pdf,item.value,ix+cellW/2,infoY+7.4,2.85,'bold',C.navy,'center');
+    if(item.suffix) rtlCenter(pdf,item.suffix,ix+cellW/2,infoY+9.5,1.9,'normal',C.grey);
   });
 
   pdf.setDrawColor(...C.grid);pdf.setLineWidth(.2);
-  [0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+4.3,2.35,'normal',C.grey,'center');});
+  [0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+4.2,2.25,'normal',C.grey,'center');});
   pdf.setDrawColor(...C.orange);pdf.setLineWidth(.45);pdf.setLineDashPattern([1.5,1.2],0);pdf.line(x,zeroY,x+w,zeroY);pdf.setLineDashPattern([],0);
-  ltr(pdf,'0 ₪',x+w,zeroY-1.3,2.05,'bold',C.orange,'right');
+  ltr(pdf,'0 ₪',x+w,zeroY-1.2,2,'bold',C.orange,'right');
   pdf.setDrawColor(...C.blue);pdf.setLineWidth(1.15);
   for(let i=1;i<points.length;i++)pdf.line(px(points[i-1].year),py(points[i-1].value),px(points[i].year),py(points[i].value));
   const bx=px(payback),by=zeroY;
@@ -112,7 +126,7 @@ function useUploadedPdfImages() {
         /function summaryBand\(pdf,x,y,w,h,p,v\)\{[\s\S]*?\n\}/,
         `function summaryBand(pdf,x,y,w,h,p,v){
   round(pdf,x,y,w,h,C.navy,C.navy,5);
-  rtl(pdf,'סיכום פיננסי ל־25 שנה',x+w-7,y+8,4.5,'bold',C.orange);
+  rtlCenter(pdf,'סיכום פיננסי ל־25 שנה',x+w/2,y+8,4.5,'bold',C.orange);
   const items=[
     ['הכנסה מצטברת',money(p.totalIncome25)],
     ['השקעה ראשונית',money(v.costWithVat)],
@@ -122,11 +136,16 @@ function useUploadedPdfImages() {
   const colW=w/4;
   items.forEach((it,i)=>{
     const cx=x+colW*i+colW/2;
-    if(i>0){pdf.setDrawColor(72,103,125);pdf.setLineWidth(.2);pdf.line(x+colW*i,y+13,x+colW*i,y+h-5);}
-    rtl(pdf,it[0],cx+colW/2-5,y+16,2.7,'bold',C.orange);
-    ltr(pdf,it[1],cx,y+27,4.35,'bold',C.white,'center');
+    if(i>0){pdf.setDrawColor(72,103,125);pdf.setLineWidth(.2);pdf.line(x+colW*i,y+12,x+colW*i,y+h-5);}
+    rtlCenter(pdf,it[0],cx,y+17,2.8,'bold',C.orange);
+    ltr(pdf,it[1],cx,y+28,4.35,'bold',C.white,'center');
   });
 }`
+      );
+
+      patched = patched.replace(
+        "function ltr(pdf,text,x,y,size,style='normal',color=C.navy,align='left'){ pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(false);pdf.text(String(text??''),x,y,{align}); }",
+        "function ltr(pdf,text,x,y,size,style='normal',color=C.navy,align='left'){ pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(false);pdf.text(String(text??''),x,y,{align}); }\nfunction rtlCenter(pdf,text,x,y,size,style='normal',color=C.navy){ pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(true);pdf.text(String(text??''),x,y,{align:'center'});pdf.setR2L(false); }"
       );
 
       patched = patched.replace(
