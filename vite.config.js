@@ -27,7 +27,7 @@ const PDF_COPY_REPLACEMENTS = [
   ['המספרים מאחורי ההערכה', 'פירוט התוצאות'],
   ['נתוני גג ותעריף', 'נתוני הפרויקט'],
   ['העתק הדוח נשמר בכרטיס הלקוח וניתן יהיה לשלוח אותו ל-WhatsApp לאחר חיבור ערוץ ההודעות העסקי.', 'עותק הדוח נשמר בכרטיס הלקוח וניתן יהיה לשלוח אותו ב-WhatsApp לאחר חיבור ערוץ ההודעות העסקי.'],
-  ['מערכות סולאריות, אגירה וליווי מקצועי משלב הבדיקה ועד הפעלת המערכת.', 'תכנון, התקנה וליווי מקצועי של מערכות סולאריות ואגירת אנרגיה משלב הבדיקה ועד הפעלת המערכת.']
+  ['מערכות סולאריות, אגירה וליווי מקצועי משלב הבדיקה ועד הפעלת המערכת.', 'תכנון, התקנה וליווי מקצועי של מערכות סולאריות ואגירת אנרגיה משלב הבדיקה ועד להפעלת המערכת.']
 ];
 
 function useUploadedPdfImages() {
@@ -43,6 +43,7 @@ function useUploadedPdfImages() {
 
       patched = patched
         .replace("function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+6.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+12.5,3.4,'normal',C.grey,w-12); }", "function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+5.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+9.5,3.2,'normal',C.grey,w-12); }")
+        .replace("metric(pdf,108,152,84,28,'עלות לפני מע״מ',money(c.v.costBeforeVat),'','tag');", "metric(pdf,108,152,84,28,'הספק המערכת',(c.v.annualProduction/1650).toFixed(1),'kWp','bolt');")
         .replace("['תקופת החזר',`${c.v.paybackWithVat.toFixed(1)} שנים`]", "['תקופת החזר',c.v.paybackWithVat.toFixed(1),'שנים']")
         .replace("cards.forEach((item,i)=>analyticsMetric(pdf,18+i*44.5,49,40.5,24,item[0],item[1]));", "cards.forEach((item,i)=>analyticsMetricV2(pdf,18+i*44.5,49,40.5,24,item[0],item[1],item[2]||''));")
         .replace("cashflowChart(pdf,25,190,160,37,projection.cashflow,c.v.paybackWithVat);", "cashflowChartV2(pdf,25,195,160,31,projection.cashflow,c.v.paybackWithVat);")
