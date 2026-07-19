@@ -51,7 +51,7 @@ function useUploadedPdfImages() {
 
       patched = patched.replace(
         /metric\(pdf,108,152,84,28,[^;]+;/,
-        "metric(pdf,108,152,84,28,'הספק המערכת',(c.v.annualProduction/1650).toFixed(1),'kWp','bolt');"
+        "metric(pdf,108,152,84,28,'הספק המערכת',(c.v.annualProduction/1650).toFixed(1)+' kWp','','bolt');"
       );
       patched = patched.replace(/\s*ltr\(pdf,'Solatrix Energy • Roof Check'[^\n]*\);/g, '');
 
