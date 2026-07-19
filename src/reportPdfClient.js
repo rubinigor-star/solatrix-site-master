@@ -6,7 +6,7 @@ import familyUrl from './assets/roof-check-report/roof-check-family.webp';
 const reportLogoUrl = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_596,h_388,al_c,q_100/Solatrix%20Logo%20Sait%20Main.png';
 const HEEBO_REGULAR_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/heebo/Heebo%5Bwght%5D.ttf';
 const HEEBO_BOLD_URL = HEEBO_REGULAR_URL;
-const C = { bg:[255,251,244], navy:[5,35,59], blue:[15,82,132], orange:[247,163,24], grey:[109,120,130], border:[232,221,205], white:[255,255,255], pale:[246,248,249], green:[20,184,82] };
+const C = { bg:[255,251,244], navy:[5,35,59], blue:[15,82,132], orange:[247,163,24], grey:[109,120,130], border:[232,221,205], white:[255,255,255], pale:[246,248,249], green:[20,184,82], grid:[225,228,231] };
 
 export async function createRoofCheckPdf({ customer = {}, reportData = {} } = {}) {
   const calculation = reportData.calculation || {};
@@ -23,8 +23,9 @@ export async function createRoofCheckPdf({ customer = {}, reportData = {} } = {}
   ]);
   page1(pdf,{customer,roof,model,v,generatedAt,logo,cover});
   pdf.addPage(); page2(pdf,{customer,v,logo,installers});
-  pdf.addPage(); page3(pdf,{family});
-  pdf.setProperties({title:'Solatrix Roof Check',subject:'Roof Check Report v1.0',author:'Solatrix Energy'});
+  pdf.addPage(); pageAnalytics(pdf,{v,logo});
+  pdf.addPage(); page4(pdf,{family});
+  pdf.setProperties({title:'Solatrix Roof Check',subject:'Roof Check Report v1.1 analytics preview',author:'Solatrix Energy'});
   return pdf.output('blob');
 }
 
@@ -35,7 +36,7 @@ function base(pdf,page,logo){
   if(logo) contain(pdf,logo,158,7,34,19);
   pdf.setDrawColor(...C.orange); pdf.setLineWidth(.35); pdf.line(18,30,192,30);
   pdf.setDrawColor(220,216,207); pdf.setLineWidth(.25); pdf.line(18,286,192,286);
-  ltr(pdf,`${page} / 3`,18,291.5,3.2,'normal',C.grey,'left');
+  ltr(pdf,`${page} / 4`,18,291.5,3.2,'normal',C.grey,'left');
   ltr(pdf,'Solatrix Energy • Roof Check',192,291.5,3.2,'normal',C.grey,'right');
 }
 
@@ -78,8 +79,33 @@ function page2(pdf,c){
   note(pdf,18,270,174,12,'תוספת אורבנית',c.v.urbanEligible?`כן — תוספת אורבנית של 6 אגורות לכל קוט״ש במשך 10 השנים הראשונות${c.v.urbanLocality?`. יישוב: ${c.v.urbanLocality}`:''}.`:'לא חושבה תוספת אורבנית.');
 }
 
-function page3(pdf,c){
-  base(pdf,3,null);
+function pageAnalytics(pdf,c){
+  base(pdf,3,c.logo);
+  rtl(pdf,'תחזית ייצור וביצועים פיננסיים',192,42,9.2,'bold',C.navy);
+  const projection = createProjection(c.v);
+  const cards=[
+    ['השקעה כוללת',money(c.v.costWithVat)],
+    ['חיסכון בשנה הראשונה',money(c.v.annualSavings)],
+    ['תקופת החזר',`${c.v.paybackWithVat.toFixed(1)} שנים`],
+    ['רווח נקי ל־25 שנה',money(projection.netProfit25)]
+  ];
+  cards.forEach((item,i)=>analyticsMetric(pdf,18+i*44.5,49,40.5,24,item[0],item[1]));
+  chartCard(pdf,18,79,174,80);
+  rtl(pdf,'ייצור חשמל חודשי צפוי',186,91,5.5,'bold',C.navy);
+  rtl(pdf,'עמודות: kWh  •  ערך כספי משוער מוצג מתחת לכל חודש',186,98,3.2,'normal',C.grey);
+  monthlyChart(pdf,25,105,160,45,projection.months);
+  ltr(pdf,`Total: ${num(c.v.annualProduction)} kWh`,25,155,3.3,'bold',C.navy,'left');
+
+  chartCard(pdf,18,165,174,72);
+  rtl(pdf,'תזרים מצטבר והחזר ההשקעה',186,177,5.5,'bold',C.navy);
+  rtl(pdf,'הקו מציג את התוצאה המצטברת לאחר ההשקעה הראשונית',186,184,3.2,'normal',C.grey);
+  cashflowChart(pdf,25,191,160,36,projection.cashflow,c.v.paybackWithVat);
+
+  summaryBand(pdf,18,243,174,35,projection,c.v);
+}
+
+function page4(pdf,c){
+  base(pdf,4,null);
   rtl(pdf,'איך מתקדמים מכאן?',192,45,11,'bold',C.navy);
   const steps=[
     [1,'שיחת היכרות','נציג Solatrix יעבור איתכם על הנתונים ויבין את מטרות הפרויקט.','users'],
@@ -93,13 +119,43 @@ function page3(pdf,c){
   contactBand(pdf,18,260,174,20);
 }
 
+function analyticsMetric(pdf,x,y,w,h,label,value){card(pdf,x,y,w,h,4);rtl(pdf,label,x+w-5,y+8,3.2,'normal',C.grey);ltr(pdf,value,x+w/2,y+18,5.4,'bold',C.navy,'center');}
+function chartCard(pdf,x,y,w,h){card(pdf,x,y,w,h,5);}
+function monthlyChart(pdf,x,y,w,h,months){
+  const max=Math.max(...months.map(m=>m.kwh),1),barW=8.4,gap=4.5,baseY=y+h;
+  pdf.setDrawColor(...C.grid);pdf.setLineWidth(.2);
+  for(let i=0;i<4;i++){const gy=y+i*h/3;pdf.line(x,gy,x+w,gy);}
+  months.forEach((m,i)=>{const bx=x+i*(barW+gap)+2,bh=(m.kwh/max)*(h-8);pdf.setFillColor(...C.orange);pdf.roundedRect(bx,baseY-bh,barW,bh,1.3,1.3,'F');ltr(pdf,m.label,bx+barW/2,baseY+5,2.5,'normal',C.grey,'center');ltr(pdf,num(m.kwh),bx+barW/2,baseY-bh-2,2.3,'bold',C.navy,'center');ltr(pdf,`₪${num(m.money)}`,bx+barW/2,baseY+9,2.1,'normal',C.grey,'center');});
+}
+function cashflowChart(pdf,x,y,w,h,points,payback){
+  const values=points.map(p=>p.value),min=Math.min(...values),max=Math.max(...values),range=Math.max(max-min,1),px=yr=>x+(yr/25)*w,py=v=>y+h-((v-min)/range)*h;
+  pdf.setDrawColor(...C.grid);pdf.setLineWidth(.2);pdf.line(x,py(0),x+w,py(0));
+  [0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+5,2.5,'normal',C.grey,'center');});
+  pdf.setDrawColor(...C.blue);pdf.setLineWidth(1);
+  for(let i=1;i<points.length;i++)pdf.line(px(points[i-1].year),py(points[i-1].value),px(points[i].year),py(points[i].value));
+  const bx=px(payback),by=py(0);pdf.setFillColor(...C.orange);pdf.circle(bx,by,2.2,'F');rtl(pdf,`נקודת איזון: ${payback.toFixed(1)} שנים`,Math.min(x+w,bx+32),Math.max(y+6,by-4),3,'bold',C.navy);
+  ltr(pdf,money(min),x,y+4,2.4,'normal',C.grey,'left');ltr(pdf,money(max),x,y+h-2,2.4,'normal',C.grey,'left');
+}
+function summaryBand(pdf,x,y,w,h,p,v){round(pdf,x,y,w,h,C.navy,C.navy,5);rtl(pdf,'סיכום פיננסי ל־25 שנה',x+w-7,y+9,4.5,'bold',C.orange);const items=[['הכנסה מצטברת',money(p.totalIncome25)],['השקעה ראשונית',money(v.costWithVat)],['רווח נקי',money(p.netProfit25)],['ROI',`${Math.round(p.roi25)}%`]];items.forEach((it,i)=>{const cx=x+8+i*41.5;ltr(pdf,it[1],cx+18,y+21,4.2,'bold',C.white,'center');rtl(pdf,it[0],cx+34,y+29,2.8,'normal',[225,233,239]);});}
+
+function createProjection(v){
+  const labels=['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצ'];
+  const weights=[0.055,0.063,0.081,0.095,0.108,0.112,0.115,0.108,0.091,0.075,0.055,0.042];
+  const months=weights.map((w,i)=>({label:labels[i],kwh:Math.round(v.annualProduction*w),money:Math.round(v.annualSavings*w)}));
+  const sumK=months.reduce((s,m)=>s+m.kwh,0);if(months.length)months[6].kwh+=Math.round(v.annualProduction)-sumK;
+  const sumM=months.reduce((s,m)=>s+m.money,0);if(months.length)months[6].money+=Math.round(v.annualSavings)-sumM;
+  const cashflow=[{year:0,value:-v.costWithVat}];let cumulative=-v.costWithVat,totalIncome=0;
+  for(let year=1;year<=25;year++){const degradation=Math.pow(.995,year-1),tariffGrowth=Math.pow(1.04,year-1),income=v.annualSavings*degradation*tariffGrowth;totalIncome+=income;cumulative+=income;cashflow.push({year,value:cumulative});}
+  return{months,cashflow,totalIncome25:totalIncome,netProfit25:totalIncome-v.costWithVat,roi25:v.costWithVat?((totalIncome-v.costWithVat)/v.costWithVat)*100:0};
+}
+
 function metric(pdf,x,y,w,h,label,value,suffix,icon){ card(pdf,x,y,w,h); iconDraw(pdf,icon,x+10,y+h/2); rtl(pdf,label,x+w-7,y+10,4,'bold',C.grey); ltr(pdf,value,x+w/2+5,y+21,8.2,'bold',C.navy,'center'); if(suffix) rtl(pdf,suffix,x+w/2+17,y+25.5,3.2,'normal',C.grey); }
 function fact(pdf,x,y,w,h,label,value,icon,isLtr=false,suffix=''){ card(pdf,x,y,w,h); iconDraw(pdf,icon,x+10,y+h/2); rtl(pdf,label,x+w-7,y+8,3.5,'normal',C.grey); if(isLtr){ ltr(pdf,value,x+w-7,y+16.5,5,'bold',C.navy,'right'); if(suffix) rtl(pdf,suffix,x+w-28,y+16.5,3.7,'normal',C.grey); } else rtl(pdf,value,x+w-7,y+16.5,5,'bold',C.navy,w-24); }
 function band(pdf,x,y,w,h,title,text){ round(pdf,x,y,w,h,C.navy,C.navy,6); rtl(pdf,title,x+w-8,y+13,7,'bold',C.white); rtl(pdf,text,x+w-8,y+23,4,'normal',[230,237,242],w-16); }
 function darkMain(pdf,x,y,w,h,title,value,unit,text){ round(pdf,x,y,w,h,C.navy,C.navy,6); iconDraw(pdf,'bolt',x+w/2,y+13,C.orange); rtl(pdf,title,x+w-8,y+31,5,'bold',C.white); ltr(pdf,value,x+w/2,y+44,8.2,'bold',C.white,'center'); ltr(pdf,unit,x+w/2,y+50,3.2,'normal',[225,233,239],'center'); rtl(pdf,text,x+w-8,y+59,3.8,'normal',[225,233,239],w-16); }
 function resultRow(pdf,x,y,w,h,label,value,unit=''){ card(pdf,x,y,w,h,3); rtl(pdf,label,x+w-5,y+7,3.4,'normal',C.grey); ltr(pdf,value,x+5,y+7,4,'bold',C.navy,'left'); if(unit){ const shift=Math.min(31,5+String(value).length*2.2); if(/[֐-׿]/.test(unit)) rtl(pdf,unit,x+shift+12,y+7,3.2,'normal',C.grey); else ltr(pdf,unit,x+shift,y+7,3.2,'normal',C.grey,'left'); } }
 function projectFact(pdf,x,y,w,h,label,value,icon,isLtr=false,labelIsLtr=false){ card(pdf,x,y,w,h,4); iconDraw(pdf,icon,x+9,y+h/2); if(labelIsLtr) ltr(pdf,label,x+w-6,y+8,3.4,'bold',C.grey,'right'); else rtl(pdf,label,x+w-6,y+8,3.4,'bold',C.grey); if(isLtr) ltr(pdf,value,x+w-6,y+17,4.6,'bold',C.navy,'right'); else rtl(pdf,value,x+w-6,y+17,4.8,'bold',C.navy); }
-function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+6.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+12.5,3.4,'normal',C.grey,w-12); }
+function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+6.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+12.5,3.2,'normal',C.grey,w-12); }
 function sectionTitle(pdf,text,x,y){ rtl(pdf,text,x,y,5.4,'bold',C.navy); }
 function step(pdf,x,y,w,h,n,title,text,icon){ card(pdf,x,y,w,h,5); pdf.setFillColor(...C.navy); pdf.circle(x+w-10,y+h/2,6,'F'); ltr(pdf,String(n),x+w-10,y+h/2+1.8,5,'bold',C.white,'center'); iconDraw(pdf,icon,x+11,y+h/2); rtl(pdf,title,x+w-22,y+10,5.3,'bold',C.navy); rtl(pdf,text,x+w-22,y+18,3.5,'normal',C.grey,w-45); }
 function whatsappBand(pdf,x,y,w,h){ round(pdf,x,y,w,h,C.navy,C.navy,5); pdf.setDrawColor(...C.green); pdf.setLineWidth(1); pdf.circle(x+10,y+h/2,5,'S'); ltr(pdf,'✓',x+10,y+h/2+1.7,4.5,'bold',C.green,'center'); rtl(pdf,'עותק הדוח נשמר בכרטיס הלקוח',x+w-8,y+8,5,'bold',C.white); rtl(pdf,'וניתן יהיה לשלוח אותו ב-WhatsApp לאחר חיבור ערוץ ההודעות העסקי.',x+w-8,y+15,3.7,'normal',[230,237,242],w-26); }
