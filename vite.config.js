@@ -45,7 +45,6 @@ function useUploadedPdfImages() {
       if (!id.replace(/\\/g, '/').endsWith('/src/reportPdfClient.js')) return null;
       let patched = code;
       for (const [from, to] of PDF_COPY_REPLACEMENTS) patched = patched.split(from).join(to);
-      patched = patched.replace("const t=markNumbers(String(text??''));", "const t=String(text??'');");
 
       patched = patched
         .replace("pageBase(pdf, 'בדיקת גג סולארית ראשונית', 1, ctx.logo);", "pageBase(pdf, '', 1, ctx.logo);")
