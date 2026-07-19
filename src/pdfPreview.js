@@ -1,3 +1,4 @@
+import './reportTypographyPatch.js';
 import { createRoofCheckPdf } from './reportPdfClient.js';
 
 const viewer = document.querySelector('#viewer');
@@ -36,19 +37,32 @@ const sample = {
   }
 };
 
+function setDownloadReady(ready) {
+  download.style.pointerEvents = ready ? 'auto' : 'none';
+  download.style.opacity = ready ? '1' : '0.45';
+  if (!ready) download.removeAttribute('href');
+}
+
 async function render() {
   status.textContent = 'מייצר PDF…';
   refresh.disabled = true;
+  setDownloadReady(false);
+  viewer.removeAttribute('src');
+
   try {
     const blob = await createRoofCheckPdf(sample);
+    if (!(blob instanceof Blob) || blob.size < 1000) throw new Error('Generated PDF is empty.');
+
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = URL.createObjectURL(blob);
     viewer.src = objectUrl;
     download.href = objectUrl;
+    setDownloadReady(true);
     status.textContent = 'התצוגה מוכנה';
   } catch (error) {
-    console.error(error);
-    status.textContent = 'שגיאה ביצירת התצוגה';
+    console.error('PDF preview failed:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    status.textContent = `שגיאה ביצירת התצוגה: ${message}`;
   } finally {
     refresh.disabled = false;
   }
@@ -56,4 +70,5 @@ async function render() {
 
 refresh.addEventListener('click', render);
 window.addEventListener('beforeunload', () => objectUrl && URL.revokeObjectURL(objectUrl));
+setDownloadReady(false);
 render();
