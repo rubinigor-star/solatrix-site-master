@@ -10,7 +10,7 @@ const PDF_IMAGE_MODULES = new Map([
 ]);
 
 const PDF_IMAGE_URLS = {
-  '\0solatrix-pdf-cover': 'https://rubinigor-star.github.io/solatrix-site-master/roof-check/pdf%201%20update.jpg?v=1',
+  '\0solatrix-pdf-cover': 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/pdf%201%20update.jpg?v=2',
   '\0solatrix-pdf-installers': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf2.jpg?v=2',
   '\0solatrix-pdf-family': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf3.jpg?v=2'
 };
