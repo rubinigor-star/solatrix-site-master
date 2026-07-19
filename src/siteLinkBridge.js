@@ -30,6 +30,8 @@ const contactKeywords = [
   /заяв/i
 ];
 
+const ROOF_PREVIEW_FALLBACK = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/igor%20.jpg?v=2070bec';
+
 function injectGlobalCleanupStyles() {
   if (document.getElementById('solatrix-global-cleanup-style')) return;
   const style = document.createElement('style');
@@ -54,6 +56,10 @@ function isCalculatorPage() {
 function isHomePage() {
   const path = window.location.pathname.replace(/\/index\.html$/, '/');
   return path.endsWith('/roof-check-by-solatrix/') || path === '/' || path.endsWith('/solatrix-site-master/');
+}
+
+function isPrivateHomesPage() {
+  return /\/private-homes(?:\.html)?\/?$/.test(window.location.pathname);
 }
 
 function siteRootUrl() {
@@ -197,6 +203,39 @@ function mountHeroRoofPhoto() {
   map.prepend(photo);
 }
 
+function restorePrivateHomesRoofPreview() {
+  if (!isPrivateHomesPage()) return;
+  const candidates = [
+    ...document.querySelectorAll('#roof-check .roof-selected, #roof-check .selected-visual, .roof-selected, .roof-map-image-placeholder')
+  ];
+  const trigger = [...document.querySelectorAll('a,button')].find((node) => /ראו\s*את\s*הגג\s*שלכם/.test((node.textContent || '').replace(/\s+/g, ' ')));
+  const section = trigger?.closest('section');
+  if (section) {
+    section.querySelectorAll('.selected-visual, figure, .demo-map, [class*="roof"][class*="visual"]').forEach((node) => candidates.push(node));
+  }
+  const target = candidates.find((node) => node && node.getBoundingClientRect().height > 140) || candidates[0];
+  if (!target || target.dataset.solatrixRoofPreviewRestored === 'true') return;
+  target.dataset.solatrixRoofPreviewRestored = 'true';
+  target.style.position = 'relative';
+  target.style.overflow = 'hidden';
+  target.style.background = '#fffaf2';
+  let image = target.querySelector('img');
+  if (!image) {
+    image = document.createElement('img');
+    target.prepend(image);
+  }
+  image.alt = 'הדמיית גג למערכת סולארית';
+  image.loading = 'eager';
+  image.decoding = 'async';
+  image.style.cssText = 'display:block;width:100%;height:100%;min-height:220px;object-fit:cover;object-position:center;';
+  const applyFallback = () => {
+    if (image.src !== ROOF_PREVIEW_FALLBACK) image.src = ROOF_PREVIEW_FALLBACK;
+  };
+  image.addEventListener('error', applyFallback, { once: true });
+  if (!image.getAttribute('src') || (image.complete && image.naturalWidth === 0)) applyFallback();
+  setTimeout(() => { if (!image.naturalWidth) applyFallback(); }, 800);
+}
+
 function removePersistentContactDock() {
   document.querySelectorAll('.mobile-bottom-cta,.mobileBottomCta,[class*="mobile-bottom-cta"]').forEach((element) => element.remove());
 }
@@ -207,6 +246,7 @@ function initSolatrixSiteLinks() {
   removeRedundantHomepageSections();
   connectRoofCheckLinks();
   mountHeroRoofPhoto();
+  restorePrivateHomesRoofPreview();
 }
 
 let maintenanceQueued = false;
@@ -218,6 +258,7 @@ const maintenanceObserver = new MutationObserver(() => {
     injectGlobalCleanupStyles();
     removePersistentContactDock();
     connectRoofCheckLinks();
+    restorePrivateHomesRoofPreview();
   });
 });
 
