@@ -62,7 +62,49 @@ function useUploadedPdfImages() {
         .replace("roundedBox(pdf, 18, 207, 174, 31, C.paleGreen, C.greenBorder, 6);", "roundedBox(pdf, 18, 203, 174, 31, C.paleGreen, C.greenBorder, 6);")
         .replace("rtlText(pdf, 'הדוח נשמר ב-Solatrix', 187, 220, 7.2, 'bold', C.navy);", "rtlText(pdf, 'הדוח נשמר', 187, 216, 7.2, 'bold', C.navy);")
         .replace("187, 230, 4.2", "187, 226, 4.2")
-        .replace("gradientBand(pdf, 18, 245, 174, 34", "gradientBand(pdf, 18, 241, 174, 38");
+        .replace("gradientBand(pdf, 18, 245, 174, 34", "gradientBand(pdf, 18, 241, 174, 38")
+        .replace("monthlyChart(pdf,25,105,160,45,projection.months);\n  ltr(pdf,`Total: ${num(c.v.annualProduction)} kWh`,25,155,3.3,'bold',C.navy,'left');", "monthlyChart(pdf,25,105,160,43,projection.months);\n  round(pdf,25,100,48,7,C.pale,C.border,3); ltr(pdf,`${num(c.v.annualProduction)} kWh`,49,104.7,3.1,'bold',C.navy,'center'); rtl(pdf,'ייצור שנתי',69,104.7,2.6,'normal',C.grey);")
+        .replace("cashflowChart(pdf,25,191,160,36,projection.cashflow,c.v.paybackWithVat);", "cashflowChart(pdf,25,190,160,37,projection.cashflow,c.v.paybackWithVat);");
+
+      patched = patched.replace(
+        /function monthlyChart\(pdf,x,y,w,h,months\)\{[\s\S]*?\n\}/,
+        `function monthlyChart(pdf,x,y,w,h,months){
+  const max=Math.max(...months.map(m=>m.kwh),1),barW=8.2,gap=4.65,baseY=y+h-9;
+  pdf.setDrawColor(...C.grid);pdf.setLineWidth(.2);
+  for(let i=0;i<4;i++){const gy=y+3+i*(h-14)/3;pdf.line(x,gy,x+w,gy);}
+  months.forEach((m,i)=>{
+    const bx=x+i*(barW+gap)+2.2,bh=(m.kwh/max)*(h-20);
+    pdf.setFillColor(...C.orange);pdf.roundedRect(bx,baseY-bh,barW,bh,1.3,1.3,'F');
+    ltr(pdf,num(m.kwh),bx+barW/2,baseY-bh-2,2.15,'bold',C.navy,'center');
+    ltr(pdf,m.label,bx+barW/2,baseY+4.2,2.35,'normal',C.grey,'center');
+    ltr(pdf,\`₪\${num(m.money)}\`,bx+barW/2,baseY+8.1,1.95,'normal',C.grey,'center');
+  });
+}`
+      );
+
+      patched = patched.replace(
+        /function cashflowChart\(pdf,x,y,w,h,points,payback\)\{[\s\S]*?\n\}/,
+        `function cashflowChart(pdf,x,y,w,h,points,payback){
+  const values=points.map(p=>p.value),actualMin=Math.min(...values),actualMax=Math.max(...values);
+  const min=actualMin*1.08,max=actualMax*1.08,range=Math.max(max-min,1);
+  const px=yr=>x+(yr/25)*w,py=v=>y+h-((v-min)/range)*h,zeroY=py(0);
+  pdf.setDrawColor(...C.grid);pdf.setLineWidth(.2);
+  [0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y+5,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+4.5,2.35,'normal',C.grey,'center');});
+  pdf.setDrawColor(...C.orange);pdf.setLineWidth(.45);pdf.setLineDashPattern([1.5,1.2],0);pdf.line(x,zeroY,x+w,zeroY);pdf.setLineDashPattern([],0);
+  ltr(pdf,'0 ₪',x+w,zeroY-1.5,2.15,'bold',C.orange,'right');
+  pdf.setDrawColor(...C.blue);pdf.setLineWidth(1.15);
+  for(let i=1;i<points.length;i++)pdf.line(px(points[i-1].year),py(points[i-1].value),px(points[i].year),py(points[i].value));
+  const bx=px(payback),by=zeroY;
+  pdf.setDrawColor(...C.orange);pdf.setLineWidth(.4);pdf.setLineDashPattern([1.2,1.1],0);pdf.line(bx,y+8,bx,by);pdf.setLineDashPattern([],0);
+  pdf.setFillColor(...C.orange);pdf.circle(bx,by,2.2,'F');
+  const calloutX=Math.min(x+w-38,Math.max(x+3,bx-14));
+  round(pdf,calloutX,y,38,8,C.pale,C.border,3);
+  rtl(pdf,'נקודת איזון',calloutX+34,y+3.4,2.25,'normal',C.grey);
+  ltr(pdf,\`\${payback.toFixed(1)} שנים\`,calloutX+19,y+6.5,2.8,'bold',C.navy,'center');
+  round(pdf,x,y+7,30,9,C.pale,C.border,3);rtl(pdf,'השקעה ראשונית',x+27,y+10.5,2.05,'normal',C.grey);ltr(pdf,money(actualMin),x+15,y+14.2,2.55,'bold',C.navy,'center');
+  round(pdf,x+w-35,y+7,35,9,C.pale,C.border,3);rtl(pdf,'תוצאה בשנה 25',x+w-3,y+10.5,2.05,'normal',C.grey);ltr(pdf,money(actualMax),x+w-17.5,y+14.2,2.55,'bold',C.navy,'center');
+}`
+      );
 
       patched = patched.replace(
         /function addCoverImage\(pdf, image, x, y, w, h, radius = 0\) \{[\s\S]*?\n\}\n\nfunction addContainImage/,
