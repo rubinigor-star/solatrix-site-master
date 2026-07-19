@@ -45,6 +45,10 @@ function useUploadedPdfImages() {
       if (!id.replace(/\\/g, '/').endsWith('/src/reportPdfClient.js')) return null;
       let patched = code;
       for (const [from, to] of PDF_COPY_REPLACEMENTS) patched = patched.split(from).join(to);
+      patched = patched.replace(
+        "function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+6.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+12.5,3.4,'normal',C.grey,w-12); }",
+        "function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+5.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+9.5,3.2,'normal',C.grey,w-12); }"
+      );
 
       patched = patched
         .replace("pageBase(pdf, 'בדיקת גג סולארית ראשונית', 1, ctx.logo);", "pageBase(pdf, '', 1, ctx.logo);")
