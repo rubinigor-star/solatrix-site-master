@@ -30,7 +30,8 @@ const contactKeywords = [
   /заяв/i
 ];
 
-const ROOF_PREVIEW_FALLBACK = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/igor%20.jpg?v=2070bec';
+const IGOR_BEFORE = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/public/assets/hero/igor-before.jpg';
+const IGOR_AFTER = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/public/assets/hero/igor-after.jpg';
 
 function injectGlobalCleanupStyles() {
   if (document.getElementById('solatrix-global-cleanup-style')) return;
@@ -44,7 +45,11 @@ function injectGlobalCleanupStyles() {
       visibility:hidden !important;
       pointer-events:none !important;
     }
-    @media(max-width:980px){body{padding-bottom:0 !important;}}
+    .igor-roof-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;height:100%;min-height:220px;background:#fffaf2}
+    .igor-roof-pair figure{position:relative;margin:0;overflow:hidden;min-width:0}
+    .igor-roof-pair img{display:block;width:100%;height:100%;min-height:220px;object-fit:cover;object-position:center}
+    .igor-roof-pair figcaption{position:absolute;right:10px;bottom:10px;padding:6px 12px;border-radius:999px;background:rgba(7,27,47,.86);color:#fff;font-weight:800;font-size:14px;line-height:1}
+    @media(max-width:980px){body{padding-bottom:0 !important}.igor-roof-pair{gap:5px;min-height:220px}.igor-roof-pair img{min-height:220px}.igor-roof-pair figcaption{right:7px;bottom:7px;font-size:12px;padding:5px 9px}}
   `;
   document.head.appendChild(style);
 }
@@ -205,35 +210,21 @@ function mountHeroRoofPhoto() {
 
 function restorePrivateHomesRoofPreview() {
   if (!isPrivateHomesPage()) return;
-  const candidates = [
-    ...document.querySelectorAll('#roof-check .roof-selected, #roof-check .selected-visual, .roof-selected, .roof-map-image-placeholder')
-  ];
+  const candidates = [...document.querySelectorAll('#roof-check .roof-selected, #roof-check .selected-visual, .roof-selected, .roof-map-image-placeholder')];
   const trigger = [...document.querySelectorAll('a,button')].find((node) => /ראו\s*את\s*הגג\s*שלכם/.test((node.textContent || '').replace(/\s+/g, ' ')));
   const section = trigger?.closest('section');
-  if (section) {
-    section.querySelectorAll('.selected-visual, figure, .demo-map, [class*="roof"][class*="visual"]').forEach((node) => candidates.push(node));
-  }
+  if (section) section.querySelectorAll('.selected-visual, figure, .demo-map, [class*="roof"][class*="visual"]').forEach((node) => candidates.push(node));
   const target = candidates.find((node) => node && node.getBoundingClientRect().height > 140) || candidates[0];
-  if (!target || target.dataset.solatrixRoofPreviewRestored === 'true') return;
-  target.dataset.solatrixRoofPreviewRestored = 'true';
+  if (!target || target.dataset.solatrixRoofPreviewRestored === 'pair') return;
+  target.dataset.solatrixRoofPreviewRestored = 'pair';
+  target.innerHTML = `
+    <div class="igor-roof-pair" aria-label="השוואת גג לפני ואחרי התקנת מערכת סולארית">
+      <figure><img src="${IGOR_BEFORE}" alt="הגג לפני התקנת פאנלים סולאריים"><figcaption>לפני</figcaption></figure>
+      <figure><img src="${IGOR_AFTER}" alt="הגג אחרי התקנת פאנלים סולאריים"><figcaption>אחרי</figcaption></figure>
+    </div>`;
   target.style.position = 'relative';
   target.style.overflow = 'hidden';
   target.style.background = '#fffaf2';
-  let image = target.querySelector('img');
-  if (!image) {
-    image = document.createElement('img');
-    target.prepend(image);
-  }
-  image.alt = 'הדמיית גג למערכת סולארית';
-  image.loading = 'eager';
-  image.decoding = 'async';
-  image.style.cssText = 'display:block;width:100%;height:100%;min-height:220px;object-fit:cover;object-position:center;';
-  const applyFallback = () => {
-    if (image.src !== ROOF_PREVIEW_FALLBACK) image.src = ROOF_PREVIEW_FALLBACK;
-  };
-  image.addEventListener('error', applyFallback, { once: true });
-  if (!image.getAttribute('src') || (image.complete && image.naturalWidth === 0)) applyFallback();
-  setTimeout(() => { if (!image.naturalWidth) applyFallback(); }, 800);
 }
 
 function removePersistentContactDock() {
