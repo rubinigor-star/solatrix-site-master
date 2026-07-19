@@ -42,15 +42,25 @@ jobs:
           rm -rf dist
           npx vite build --outDir dist --emptyOutDir
           echo "Generated files:"
-          find dist -maxdepth 3 -type f -print | sort
+          find dist -maxdepth 5 -type f -print | sort
+
+      - name: Normalize homepage artifact
+        run: |
+          if [ ! -f dist/index.html ]; then
+            candidate="$(find dist -mindepth 2 -type f -name index.html -print -quit)"
+            if [ -n "$candidate" ]; then
+              echo "Using generated homepage candidate: $candidate"
+              cp "$candidate" dist/index.html
+            else
+              echo "No generated homepage was found. Current dist contents:"
+              find dist -maxdepth 5 -print || true
+              exit 1
+            fi
+          fi
 
       - name: Verify production artifact
         run: |
-          if [ ! -f dist/index.html ]; then
-            echo "dist/index.html was not generated. Current dist contents:"
-            find dist -maxdepth 4 -print || true
-            exit 1
-          fi
+          test -f dist/index.html
           grep -q "hero-preview-card" dist/index.html
           if grep -R -n -F '<div aria-label="פעולות מהירות" class="mobile-bottom-cta">' dist; then
             echo 'Persistent mobile contact dock is still present in the production artifact.'
