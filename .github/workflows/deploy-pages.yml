@@ -38,11 +38,19 @@ jobs:
         run: npm install
 
       - name: Build production
-        run: npm run build
+        run: |
+          rm -rf dist
+          npx vite build --outDir dist --emptyOutDir
+          echo "Generated files:"
+          find dist -maxdepth 3 -type f -print | sort
 
       - name: Verify production artifact
         run: |
-          test -f dist/index.html
+          if [ ! -f dist/index.html ]; then
+            echo "dist/index.html was not generated. Current dist contents:"
+            find dist -maxdepth 4 -print || true
+            exit 1
+          fi
           grep -q "hero-preview-card" dist/index.html
           if grep -R -n -F '<div aria-label="פעולות מהירות" class="mobile-bottom-cta">' dist; then
             echo 'Persistent mobile contact dock is still present in the production artifact.'
