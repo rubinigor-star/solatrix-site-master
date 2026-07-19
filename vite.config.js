@@ -10,9 +10,9 @@ const PDF_IMAGE_MODULES = new Map([
 ]);
 
 const PDF_IMAGE_URLS = {
-  '\0solatrix-pdf-cover': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf1.jpg',
-  '\0solatrix-pdf-installers': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf2.jpg',
-  '\0solatrix-pdf-family': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf3.jpg'
+  '\0solatrix-pdf-cover': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf1.jpg?v=2',
+  '\0solatrix-pdf-installers': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf2.jpg?v=2',
+  '\0solatrix-pdf-family': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf3.jpg?v=2'
 };
 
 function useUploadedPdfImages() {
@@ -25,6 +25,14 @@ function useUploadedPdfImages() {
     load(id) {
       const url = PDF_IMAGE_URLS[id];
       return url ? `export default ${JSON.stringify(url)};` : null;
+    },
+    transform(code, id) {
+      if (!id.replace(/\\/g, '/').endsWith('/src/reportPdfClient.js')) return null;
+      const patched = code.replace(
+        "  pdf.saveGraphicsState();\n  pdf.roundedRect(x, y, w, h, radius, radius, null);\n  pdf.clip();\n  pdf.addImage(image.data, 'JPEG', drawX, drawY, drawW, drawH, undefined, 'NONE');\n  pdf.restoreGraphicsState();",
+        "  pdf.addImage(image.data, 'JPEG', drawX, drawY, drawW, drawH, undefined, 'NONE');"
+      );
+      return { code: patched, map: null };
     }
   };
 }
