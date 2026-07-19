@@ -3,6 +3,32 @@ import { defineConfig } from 'vite';
 const SITE_WIDE_SCRIPT_SKIP = new Set(['roof-check.html', 'roof-check/index.html', 'admin.html']);
 const HOMEPAGE_SECTION_TEXTS_TO_REMOVE = ['הבעיה היא לא המערכת', 'כל גג נראה אחרת'];
 
+const PDF_IMAGE_MODULES = new Map([
+  ['./assets/roof-check-report/roof-check-cover-hero.webp', '\0solatrix-pdf-cover'],
+  ['./assets/roof-check-report/roof-check-installers.webp', '\0solatrix-pdf-installers'],
+  ['./assets/roof-check-report/roof-check-family.webp', '\0solatrix-pdf-family']
+]);
+
+const PDF_IMAGE_URLS = {
+  '\0solatrix-pdf-cover': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf1.jpg',
+  '\0solatrix-pdf-installers': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf2.jpg',
+  '\0solatrix-pdf-family': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf3.jpg'
+};
+
+function useUploadedPdfImages() {
+  return {
+    name: 'solatrix-uploaded-pdf-images',
+    enforce: 'pre',
+    resolveId(source) {
+      return PDF_IMAGE_MODULES.get(source) || null;
+    },
+    load(id) {
+      const url = PDF_IMAGE_URLS[id];
+      return url ? `export default ${JSON.stringify(url)};` : null;
+    }
+  };
+}
+
 const HERO_PREVIEW_MARKUP = `
   <div class="hero-preview-card" aria-label="הדגמת מערכת סולארית ביתית של 22.5 קילוואט לפני ואחרי">
     <div class="hero-preview-photo hero-preview-before" aria-hidden="true"></div>
@@ -54,4 +80,4 @@ function injectHeroPreview(html){const openingTag=/(<div\s+class=["'][^"']*\bsol
 function isHomepageFile(filename){const normalized=filename.replace(/^\.\//,'');return normalized==='index.html'||(normalized.endsWith('/index.html')&&!normalized.endsWith('/roof-check/index.html'));}
 function injectSolatrixScripts(){return{name:'solatrix-site-wide-scripts',transformIndexHtml(html,context){const filename=String(context?.filename||'').replace(/\\/g,'/');const homepage=isHomepageFile(filename);let cleanedHtml=removePersistentMobileDock(html);cleanedHtml=homepage?fixHomepageCopy(stripUnwantedHomepageSections(cleanedHtml)):cleanedHtml;let heroInjected=false;if(homepage){const result=injectHeroPreview(cleanedHtml);cleanedHtml=result.html;heroInjected=result.injected;}const homepageTags=homepage&&heroInjected?[{tag:'style',children:HERO_PREVIEW_STYLES,injectTo:'head'}]:[];const accessibilityTag=filename.endsWith('admin.html')?[]:[{tag:'script',attrs:{type:'module',src:'./src/accessibilityWidget.js'},injectTo:'body'}];if([...SITE_WIDE_SCRIPT_SKIP].some(page=>filename.endsWith(page)))return{html:cleanedHtml,tags:[...homepageTags,...accessibilityTag]};return{html:cleanedHtml,tags:[...homepageTags,...accessibilityTag,{tag:'script',attrs:{type:'module',src:'./src/siteLinkBridge.js'},injectTo:'body'},{tag:'script',attrs:{type:'module',src:'./src/globalLeadForm.js'},injectTo:'body'}]};}};}
 
-export default defineConfig({base:'./',plugins:[injectSolatrixScripts()],build:{rollupOptions:{input:{main:'index.html',privateHomes:'private-homes.html',solarPrice:'solar-price.html',roofCheckRedirect:'roof-check.html',roofCheckApp:'roof-check/index.html',storage:'storage.html',business:'business.html',agriculture:'agriculture.html',faq:'faq.html',contact:'contact.html',admin:'admin.html'}}}});
+export default defineConfig({base:'./',plugins:[useUploadedPdfImages(),injectSolatrixScripts()],build:{rollupOptions:{input:{main:'index.html',privateHomes:'private-homes.html',solarPrice:'solar-price.html',roofCheckRedirect:'roof-check.html',roofCheckApp:'roof-check/index.html',storage:'storage.html',business:'business.html',agriculture:'agriculture.html',faq:'faq.html',contact:'contact.html',admin:'admin.html'}}}});
