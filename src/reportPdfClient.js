@@ -75,7 +75,7 @@ function page2(pdf,c){
   projectFact(pdf,125,195,67,24,'חשבון חשמל חודשי',money(c.v.monthlyBill||0),'bill',true);
   projectFact(pdf,125,223,67,24,'WhatsApp',c.customer.phone||'—','whatsapp',true,true);
   note(pdf,18,249,174,17,'מודל תעריף','₪0.48 לקוט״ש שנמכר + עלייה של כ-4% לערך הצריכה העצמית.');
-  note(pdf,18,270,174,12,'תוספת אורבנית',c.v.urbanEligible?`כן — תוספת ₪0.06 לקוט״ש ב-10 השנים הראשונות${c.v.urbanLocality?` (${c.v.urbanLocality})`:''}.`:'לא חושבה תוספת אורבנית.');
+  note(pdf,18,270,174,12,'תוספת אורבנית',c.v.urbanEligible?`כן — תוספת אורבנית של 6 אגורות לכל קוט״ש במשך 10 השנים הראשונות${c.v.urbanLocality?`. יישוב: ${c.v.urbanLocality}`:''}.`:'לא חושבה תוספת אורבנית.');
 }
 
 function page3(pdf,c){
