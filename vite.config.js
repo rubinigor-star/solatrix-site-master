@@ -10,13 +10,12 @@ const PDF_IMAGE_MODULES = new Map([
 ]);
 
 const PDF_IMAGE_URLS = {
-  '\0solatrix-pdf-cover': 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/pdf%201%20update.jpg?v=3',
-  '\0solatrix-pdf-installers': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf2.jpg?v=3',
-  '\0solatrix-pdf-family': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf3.jpg?v=3'
+  '\0solatrix-pdf-cover': 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/roof-check/pdf%201%20update.jpg?v=4',
+  '\0solatrix-pdf-installers': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf2.jpg?v=4',
+  '\0solatrix-pdf-family': 'https://rubinigor-star.github.io/solatrix-site-master/assets/hero/pdf3.jpg?v=4'
 };
 
 const PDF_COPY_REPLACEMENTS = [
-  ['בדיקת גג סולארית ראשונית', 'דו״ח התאמת גג למערכת סולארית'],
   ['סיכום הבדיקה', 'סיכום ראשוני'],
   ['הנתונים מציגים סדר גודל ראשוני של התאמת הגג, הייצור, החיסכון והחזר ההשקעה. החישוב ישמש בסיס לשיחה מקצועית עם נציג Solatrix Energy.', 'הנתונים שלפניכם מציגים הערכה ראשונית של פוטנציאל המערכת הסולארית על גגכם. לאחר בדיקה מקצועית ניתן יהיה להכין תכנון מלא, הצעת מחיר מדויקת וליווי מלא עד להפעלת המערכת.'],
   ['החזר כולל מע״מ', 'תקופת החזר השקעה'],
@@ -44,15 +43,40 @@ function useUploadedPdfImages() {
     },
     transform(code, id) {
       if (!id.replace(/\\/g, '/').endsWith('/src/reportPdfClient.js')) return null;
-      let patched = code.replace(
-        "  pdf.saveGraphicsState();\n  pdf.roundedRect(x, y, w, h, radius, radius, null);\n  pdf.clip();\n  pdf.addImage(image.data, 'JPEG', drawX, drawY, drawW, drawH, undefined, 'NONE');\n  pdf.restoreGraphicsState();",
-        "  pdf.addImage(image.data, 'JPEG', drawX, drawY, drawW, drawH, undefined, 'NONE');"
-      );
+      let patched = code;
       for (const [from, to] of PDF_COPY_REPLACEMENTS) patched = patched.split(from).join(to);
+
       patched = patched
-        .replace("gradientBand(pdf, 18, 245, 174, 34, 'Solatrix Energy',", "gradientBand(pdf, 18, 245, 174, 34, 'Solatrix Energy',")
-        .replace("rtlText(pdf, title, x + w - 7, y + 14, 7.4, 'bold', C.white);", "ltrText(pdf, title, x + w - 7, y + 14, 7.4, 'bold', C.white, 'right');")
-        .replace("rtlText(pdf, 'הדוח נשמר ב-Solatrix', 187, 220, 7.2, 'bold', C.navy);", "rtlText(pdf, 'הדוח נשמר ב-Solatrix', 187, 220, 7.2, 'bold', C.navy);");
+        .replace("pageBase(pdf, 'בדיקת גג סולארית ראשונית', 1, ctx.logo);", "pageBase(pdf, '', 1, ctx.logo);")
+        .replace("`${ctx.values.paybackWithVat.toFixed(1)} שנים`", "ctx.values.paybackWithVat.toFixed(1)")
+        .replace("rtlText(pdf, title, 60, 19, 4.8, 'bold', [114, 128, 140]);", "if (title) rtlText(pdf, title, 60, 19, 4.8, 'bold', [114, 128, 140]);")
+        .replace("ltrText(pdf, value, x + w - 5, y + 17.2, 7.2, 'bold', C.navy, 'right');", "ltrText(pdf, value, x + w / 2, y + 17.2, 7.2, 'bold', C.navy, 'center');")
+        .replace("rtlText(pdf, String(value), x + w - 5, y + 15.2, 5.2, 'bold', C.navy, w - 10);", "centerValue(pdf, String(value), x + w / 2, y + 15.2, 5.2, C.navy);")
+        .replace("ltrText(pdf, value, x + 5, y + 6.8, 4.1, 'bold', C.navy, 'left');", "ltrText(pdf, value, x + w / 2, y + 6.8, 4.1, 'bold', C.navy, 'center');")
+        .replace("rtlText(pdf, String(value), x + w - 5, y + 13, 5.4, 'bold', C.navy, w - 10);", "centerValue(pdf, String(value), x + w / 2, y + 13, 5.4, C.navy);")
+        .replace("addCoverImage(pdf, ctx.family, 18, 148, 174, 52, 7);", "addCoverImage(pdf, ctx.family, 18, 151, 174, 46, 7);")
+        .replace("roundedBox(pdf, 18, 207, 174, 31, C.paleGreen, C.greenBorder, 6);", "roundedBox(pdf, 18, 203, 174, 31, C.paleGreen, C.greenBorder, 6);")
+        .replace("rtlText(pdf, 'הדוח נשמר ב-Solatrix', 187, 220, 7.2, 'bold', C.navy);", "rtlText(pdf, 'הדוח נשמר', 187, 216, 7.2, 'bold', C.navy);")
+        .replace("187, 230, 4.2", "187, 226, 4.2")
+        .replace("gradientBand(pdf, 18, 245, 174, 34", "gradientBand(pdf, 18, 241, 174, 38");
+
+      patched = patched.replace(
+        /function addCoverImage\(pdf, image, x, y, w, h, radius = 0\) \{[\s\S]*?\n\}\n\nfunction addContainImage/,
+        `function addCoverImage(pdf, image, x, y, w, h, radius = 0) {
+  if (!image) return;
+  pdf.addImage(image.data, 'JPEG', x, y, w, h, undefined, 'NONE');
+}
+
+function centerValue(pdf, value, x, y, size, color = C.navy) {
+  const text = String(value ?? '');
+  const hasHebrew = /[\u0590-\u05FF]/.test(text);
+  if (hasHebrew) rtlText(pdf, text, x, y, size, 'bold', color);
+  else ltrText(pdf, text, x, y, size, 'bold', color, 'center');
+}
+
+function addContainImage`
+      );
+
       return { code: patched, map: null };
     }
   };
@@ -72,7 +96,7 @@ const HERO_PREVIEW_MARKUP = `
   </div>`;
 
 const HERO_PREVIEW_STYLES = `
-.solatrix-v34-visual{position:relative!important;min-height:500px!important;overflow:hidden!important;border-radius:30px!important;background:#071b29!important;box-shadow:0 34px 88px rgba(6,40,64,.22),0 0 0 1px rgba(255,255,255,.62)!important;border:1px solid rgba(255,255,255,.56)!important}.solatrix-v34-visual>:not(.hero-preview-card){display:none!important}.hero-preview-card{position:absolute;inset:0;overflow:hidden;border-radius:inherit;color:#fff;font-family:Assistant,system-ui,sans-serif;background:#071c2b}.hero-preview-photo{position:absolute;left:18px;right:18px;top:68px;bottom:112px;border-radius:20px;background-size:cover;background-position:center;box-shadow:inset 0 0 70px rgba(2,13,20,.2)}.hero-preview-before{background-image:linear-gradient(180deg,rgba(3,18,29,.03),rgba(3,18,29,.16)),url('./assets/hero/hero%20before.jpg')}.hero-preview-after{background-image:linear-gradient(180deg,rgba(3,18,29,.03),rgba(3,18,29,.16)),url('./assets/hero/hero%20after.jpg');clip-path:inset(0 0 0 100%);animation:igorReveal 7s ease-in-out infinite}@keyframes igorReveal{0%,100%{clip-path:inset(0 0 0 100%)}50%{clip-path:inset(0 0 0 0)}}.hero-preview-card:before{content:"";position:absolute;z-index:2;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.55),transparent 70%);pointer-events:none}.hero-preview-top{position:relative;z-index:6;display:flex;justify-content:space-between;align-items:center;padding:19px 22px;border-bottom:1px solid rgba(255,255,255,.13);font-size:13px;font-weight:900;letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.5)}.hero-preview-status{display:flex;align-items:center;gap:8px;font-size:10px;color:rgba(255,255,255,.78);letter-spacing:.1em}.hero-preview-status:before{content:"";width:7px;height:7px;border-radius:50%;background:#16d76d;box-shadow:0 0 0 6px rgba(22,215,109,.12),0 0 22px rgba(22,215,109,.55)}.hero-preview-before-label,.hero-preview-after-label{position:absolute;z-index:7;top:88px;padding:8px 13px;border-radius:999px;background:rgba(4,20,32,.74);border:1px solid rgba(255,255,255,.18);font-size:11px;font-weight:900;backdrop-filter:blur(10px)}.hero-preview-before-label{left:34px}.hero-preview-after-label{right:34px}.hero-preview-scan{position:absolute;z-index:8;top:68px;bottom:112px;left:0;width:3px;background:linear-gradient(180deg,transparent,#ffd45c 12%,#fff2b4 50%,#ffd45c 88%,transparent);box-shadow:0 0 14px #ffd45c,0 0 32px rgba(255,212,92,.58);animation:igorScan 7s ease-in-out infinite;pointer-events:none}@keyframes igorScan{0%,100%{left:0}50%{left:100%}}.hero-preview-scan span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#0a2030;font-size:24px;font-weight:900;box-shadow:0 10px 28px rgba(0,0,0,.25),0 0 0 5px rgba(255,212,92,.22)}.hero-preview-coordinates{position:absolute;z-index:7;left:32px;bottom:124px;padding:7px 10px;border-radius:9px;background:rgba(4,22,35,.74);border:1px solid rgba(255,255,255,.16);font-size:9px;font-weight:800;letter-spacing:.08em;color:rgba(255,255,255,.82);backdrop-filter:blur(8px)}.hero-preview-stats{position:absolute;left:18px;right:18px;bottom:16px;z-index:7;display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.hero-preview-stat{padding:10px 10px 9px;border-radius:12px;background:rgba(248,250,251,.94);color:#062840;border:1px solid rgba(255,255,255,.72);box-shadow:0 12px 28px rgba(0,0,0,.18);backdrop-filter:blur(12px)}.hero-preview-stat span{display:block;font-size:9px;font-weight:800;color:#7a858c}.hero-preview-stat b{display:block;margin-top:2px;font-size:15px;white-space:nowrap;letter-spacing:-.02em}@media(max-width:900px){.solatrix-v34-visual{min-height:430px!important;border-radius:24px!important}.hero-preview-top{padding:16px 17px;font-size:11px}.hero-preview-status{font-size:8px}.hero-preview-photo{left:13px;right:13px;top:61px;bottom:168px}.hero-preview-before-label,.hero-preview-after-label{top:75px;font-size:9px;padding:6px 10px}.hero-preview-before-label{left:22px}.hero-preview-after-label{right:22px}.hero-preview-scan{top:61px;bottom:168px}.hero-preview-scan span{width:44px;height:44px;font-size:20px}.hero-preview-coordinates{left:22px;bottom:180px;font-size:8px}.hero-preview-stats{left:13px;right:13px;bottom:13px;grid-template-columns:repeat(2,1fr);gap:7px}.hero-preview-stat{padding:9px}.hero-preview-stat b{font-size:14px}}@media(prefers-reduced-motion:reduce){.hero-preview-after,.hero-preview-scan{animation:none!important}.hero-preview-after{clip-path:inset(0 0 0 50%)}.hero-preview-scan{left:50%}}`;
+.solatrix-v34-visual{position:relative!important;min-height:500px!important;overflow:hidden!important;border-radius:30px!important;background:#071b29!important}.solatrix-v34-visual>:not(.hero-preview-card){display:none!important}.hero-preview-card{position:absolute;inset:0;overflow:hidden;border-radius:inherit;color:#fff;font-family:Assistant,system-ui,sans-serif;background:#071c2b}.hero-preview-photo{position:absolute;left:18px;right:18px;top:68px;bottom:112px;border-radius:20px;background-size:cover;background-position:center}.hero-preview-before{background-image:url('./assets/hero/hero%20before.jpg')}.hero-preview-after{background-image:url('./assets/hero/hero%20after.jpg');clip-path:inset(0 0 0 100%);animation:igorReveal 7s ease-in-out infinite}@keyframes igorReveal{0%,100%{clip-path:inset(0 0 0 100%)}50%{clip-path:inset(0 0 0 0)}}.hero-preview-top{position:relative;z-index:6;display:flex;justify-content:space-between;padding:19px 22px;font-size:13px;font-weight:900}.hero-preview-before-label,.hero-preview-after-label{position:absolute;z-index:7;top:88px;padding:8px 13px;border-radius:999px;background:rgba(4,20,32,.74);font-size:11px;font-weight:900}.hero-preview-before-label{left:34px}.hero-preview-after-label{right:34px}.hero-preview-scan{position:absolute;z-index:8;top:68px;bottom:112px;left:0;width:3px;background:#ffd45c;animation:igorScan 7s ease-in-out infinite}@keyframes igorScan{0%,100%{left:0}50%{left:100%}}.hero-preview-scan span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#0a2030}.hero-preview-coordinates{position:absolute;z-index:7;left:32px;bottom:124px}.hero-preview-stats{position:absolute;left:18px;right:18px;bottom:16px;z-index:7;display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.hero-preview-stat{padding:10px;border-radius:12px;background:#fff;color:#062840}.hero-preview-stat span{display:block;font-size:9px}.hero-preview-stat b{display:block;font-size:15px}@media(max-width:900px){.solatrix-v34-visual{min-height:430px!important}.hero-preview-stats{grid-template-columns:repeat(2,1fr)}}`;
 
 function normalizeVisibleText(fragment = '') {return fragment.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim();}
 function findSectionSpans(html){const tagPattern=/<\/?section\b[^>]*>/gi;const stack=[];const spans=[];let match;while((match=tagPattern.exec(html))!==null){const tag=match[0];if(!/^<\/section/i.test(tag)){stack.push({start:match.index,openTag:tag});continue;}const opening=stack.pop();if(opening)spans.push({start:opening.start,end:tagPattern.lastIndex,openTag:opening.openTag});}return spans;}
