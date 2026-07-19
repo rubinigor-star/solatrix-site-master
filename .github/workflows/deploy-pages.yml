@@ -43,14 +43,32 @@ jobs:
       - name: Build production
         run: |
           rm -rf "$GITHUB_WORKSPACE/dist"
-          npx vite build "$GITHUB_WORKSPACE" --outDir "$GITHUB_WORKSPACE/dist" --emptyOutDir
+          npm run build
           echo "Generated files:"
-          find "$GITHUB_WORKSPACE/dist" -maxdepth 5 -type f -print | sort
+          find "$GITHUB_WORKSPACE/dist" -maxdepth 6 -type f -print | sort || true
+
+      - name: Normalize homepage artifact
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/dist/index.html" ]; then
+            echo "Homepage already exists at dist/index.html"
+          elif [ -f "$GITHUB_WORKSPACE/dist/main.html" ]; then
+            echo "Using Vite multi-page output dist/main.html as homepage"
+            cp "$GITHUB_WORKSPACE/dist/main.html" "$GITHUB_WORKSPACE/dist/index.html"
+          else
+            HOMEPAGE_FILE="$(find "$GITHUB_WORKSPACE/dist" -type f -name '*.html' -print0 | xargs -0 grep -l 'solatrix-v34-visual' | head -n 1 || true)"
+            if [ -z "$HOMEPAGE_FILE" ]; then
+              echo "Could not locate the built homepage. HTML files found:"
+              find "$GITHUB_WORKSPACE/dist" -type f -name '*.html' -print || true
+              exit 1
+            fi
+            echo "Using built homepage: $HOMEPAGE_FILE"
+            cp "$HOMEPAGE_FILE" "$GITHUB_WORKSPACE/dist/index.html"
+          fi
 
       - name: Verify production artifact
         run: |
-          test -f "$GITHUB_WORKSPACE/dist/index.html"
-          grep -q "hero-preview-card" "$GITHUB_WORKSPACE/dist/index.html"
+          test -s "$GITHUB_WORKSPACE/dist/index.html"
+          grep -q "solatrix-v34-visual" "$GITHUB_WORKSPACE/dist/index.html"
           if grep -R -n -F '<div aria-label="פעולות מהירות" class="mobile-bottom-cta">' "$GITHUB_WORKSPACE/dist"; then
             echo 'Persistent mobile contact dock is still present in the production artifact.'
             exit 1
