@@ -3,385 +3,135 @@ import coverHeroUrl from './assets/roof-check-report/roof-check-cover-hero.webp'
 import installersUrl from './assets/roof-check-report/roof-check-installers.webp';
 import familyUrl from './assets/roof-check-report/roof-check-family.webp';
 
-const REPORT_TEMPLATE_VERSION = 'roof-check-vector-v2';
 const reportLogoUrl = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_596,h_388,al_c,q_100/Solatrix%20Logo%20Sait%20Main.png';
-const HEEBO_REGULAR_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/heebo/static/Heebo-Regular.ttf';
-const HEEBO_BOLD_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/heebo/static/Heebo-Bold.ttf';
-
-const C = {
-  bg: [255, 250, 242],
-  navy: [6, 29, 51],
-  blue: [16, 75, 122],
-  orange: [245, 161, 26],
-  grey: [119, 131, 141],
-  lightBorder: [234, 219, 199],
-  white: [255, 255, 255],
-  paleOrange: [255, 241, 204],
-  paleGreen: [234, 249, 242],
-  greenBorder: [168, 224, 201]
-};
+const HEEBO_REGULAR_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/heebo/Heebo%5Bwght%5D.ttf';
+const HEEBO_BOLD_URL = HEEBO_REGULAR_URL;
+const C = { bg:[255,251,244], navy:[5,35,59], blue:[15,82,132], orange:[247,163,24], grey:[109,120,130], border:[232,221,205], white:[255,255,255], pale:[246,248,249], green:[20,184,82] };
 
 export async function createRoofCheckPdf({ customer = {}, reportData = {} } = {}) {
   const calculation = reportData.calculation || {};
   const model = reportData.calculationModel || {};
   const roof = reportData.roofData || {};
   const entries = Object.entries(calculation);
-  const surfaces = Array.isArray(roof.surfaces) ? roof.surfaces : [];
-  const surfaceArea = surfaces.reduce((sum, surface) => sum + Number(surface?.area || 0), 0);
-  const values = createReportValues({ model, entries, roof, surfaceArea });
-  const generatedAt = new Date().toLocaleString('he-IL', {
-    year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  });
-  const firstYearLabel = values.isCommercial ? 'הכנסה בשנה הראשונה' : 'חיסכון בשנה הראשונה';
-  const tariffText = values.isCommercial
-    ? '₪0.40 קבוע לקוט״ש למשך 25 שנה'
-    : '₪0.48 לקוט״ש שנמכר + עליית 4% לערך הצריכה העצמית';
-  const urbanText = values.urbanEligible
-    ? `כן - תוספת ₪0.06 לקוט״ש ב-10 השנים הראשונות${values.urbanLocality ? ` (${values.urbanLocality})` : ''}`
-    : 'לא חושבה תוספת אורבנית';
-
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true, putOnlyUsedFonts: true });
+  const surfaceArea = (Array.isArray(roof.surfaces) ? roof.surfaces : []).reduce((s,v)=>s+Number(v?.area||0),0);
+  const v = createReportValues({ model, entries, roof, surfaceArea });
+  const generatedAt = new Date().toLocaleString('he-IL',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const pdf = new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true,putOnlyUsedFonts:true});
   await installFonts(pdf);
   const [logo, cover, installers, family] = await Promise.all([
-    loadImageData(reportLogoUrl, 1200),
-    loadImageData(coverHeroUrl, 3000),
-    loadImageData(installersUrl, 2400),
-    loadImageData(familyUrl, 3000)
+    loadImageData(reportLogoUrl,1200), loadImageData(coverHeroUrl,3200), loadImageData(installersUrl,2600), loadImageData(familyUrl,3200)
   ]);
-
-  drawPageOne(pdf, { customer, roof, model, values, generatedAt, firstYearLabel, logo, cover });
-  pdf.addPage('a4', 'portrait');
-  drawPageTwo(pdf, { customer, values, firstYearLabel, tariffText, urbanText, logo, installers });
-  pdf.addPage('a4', 'portrait');
-  drawPageThree(pdf, { logo, family });
-
-  pdf.setProperties({
-    title: 'Solatrix Roof Check',
-    subject: `Solatrix Roof Check - ${REPORT_TEMPLATE_VERSION}`,
-    author: 'Solatrix Energy',
-    creator: 'Solatrix Roof Check'
-  });
+  page1(pdf,{customer,roof,model,v,generatedAt,logo,cover});
+  pdf.addPage(); page2(pdf,{customer,v,logo,installers});
+  pdf.addPage(); page3(pdf,{logo,family});
+  pdf.setProperties({title:'Solatrix Roof Check',subject:'Premium Roof Check Report',author:'Solatrix Energy'});
   return pdf.output('blob');
 }
 
-export async function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
-    reader.onerror = () => reject(reader.error || new Error('Unable to read PDF blob.'));
-    reader.readAsDataURL(blob);
-  });
+export async function blobToBase64(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||'').split(',')[1]||'');r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});}
+
+function base(pdf,page,logo){
+  pdf.setFillColor(...C.bg); pdf.rect(0,0,210,297,'F');
+  if(logo) contain(pdf,logo,158,7,34,19);
+  pdf.setDrawColor(...C.orange); pdf.setLineWidth(.35); pdf.line(18,30,192,30);
+  pdf.setDrawColor(220,216,207); pdf.setLineWidth(.25); pdf.line(18,286,192,286);
+  ltr(pdf,`${page} / 3`,18,291.5,3.2,'normal',C.grey,'left');
+  ltr(pdf,'Solatrix Energy • Roof Check',192,291.5,3.2,'normal',C.grey,'right');
 }
 
-function drawPageOne(pdf, ctx) {
-  pageBase(pdf, 'בדיקת גג סולארית ראשונית', 1, ctx.logo);
-  addCoverImage(pdf, ctx.cover, 18, 36, 174, 66, 8);
+function page1(pdf,c){
+  base(pdf,1,c.logo);
+  cover(pdf,c.cover,18,36,174,78,5);
+  metric(pdf,18,119,84,28,'תקופת החזר השקעה',c.v.paybackWithVat.toFixed(1),'שנים','clock');
+  metric(pdf,108,119,84,28,'חיסכון בשנה הראשונה',money(c.v.annualSavings),'','coins');
+  metric(pdf,18,152,84,28,'עלות כולל מע״מ',money(c.v.costWithVat),'','calc');
+  metric(pdf,108,152,84,28,'עלות לפני מע״מ',money(c.v.costBeforeVat),'','tag');
+  band(pdf,18,185,174,35,'סיכום ראשוני','הנתונים שלפניכם מציגים הערכה ראשונית של פוטנציאל המערכת הסולארית על גגכם. לאחר בדיקה מקצועית ניתן יהיה להכין תכנון מלא, הצעת מחיר מדויקת וליווי מלא עד להפעלת המערכת.');
+  fact(pdf,18,226,84,22,'כתובת הנכס',c.roof.address||c.model.address||'—','pin');
+  fact(pdf,108,226,84,22,'שם הלקוח',c.customer.name||'—','user');
+  fact(pdf,18,253,84,22,'תאריך הפקה',c.generatedAt,'calendar',true);
+  fact(pdf,108,253,84,22,'שטח הגג שסומן',`${num(c.v.roofArea)} מ״ר`,'area');
+}
 
-  const cards = [
-    [ctx.firstYearLabel, formatMoney(ctx.values.annualSavings)],
-    ['החזר כולל מע״מ', `${ctx.values.paybackWithVat.toFixed(1)} שנים`],
-    ['עלות לפני מע״מ', formatMoney(ctx.values.costBeforeVat)],
-    ['עלות כולל מע״מ', formatMoney(ctx.values.costWithVat)]
+function page2(pdf,c){
+  base(pdf,2,c.logo);
+  rtl(pdf,'נתוני החישוב',192,42,10,'bold',C.navy);
+  darkMain(pdf,18,49,68,73,'תפוקת חשמל שנתית',`${num(c.v.annualProduction)} kWh`,'ייצור החשמל השנתי הצפוי בהתאם לשטח הגג, הספק המערכת ותנאי ההתקנה.');
+  cover(pdf,c.installers,90,49,102,73,5);
+  sectionTitle(pdf,'פירוט התוצאות',102,133); sectionTitle(pdf,'נתוני הפרויקט',192,133);
+  const rows=[
+    ['חיסכון בשנה הראשונה',money(c.v.annualSavings)],['תקופת החזר השקעה',`${c.v.paybackWithVat.toFixed(1)} שנים`],['עלות לפני מע״מ',money(c.v.costBeforeVat)],['עלות כולל מע״מ',money(c.v.costWithVat)],['שטח גג מסומן',`${num(c.v.roofArea)} מ״ר`],['שטח גג שמיש',`${num(c.v.usableArea)} מ״ר`],['מספר פאנלים',num(c.v.panels)],['ייצור שנתי',`${num(c.v.annualProduction)} kWh`]
   ];
-  cards.forEach(([label, value], i) => {
-    const x = i % 2 === 0 ? 107 : 18;
-    const y = i < 2 ? 109 : 136;
-    metricCard(pdf, x, y, 85, 22, label, value);
-  });
+  rows.forEach((r,i)=>resultRow(pdf,18,139+i*13,102,11,r[0],r[1]));
+  projectFact(pdf,125,139,67,24,'סוג גג',c.v.isCommercial?'מסחרי':'ביתי','home');
+  projectFact(pdf,125,167,67,24,'תוספת אורבנית',c.v.urbanEligible?'כן':'לא','building');
+  projectFact(pdf,125,195,67,24,'חשבון חשמל חודשי',c.v.monthlyBill?money(c.v.monthlyBill):'—','bill');
+  projectFact(pdf,125,223,67,24,'WhatsApp',c.customer.phone||'—','whatsapp',true);
+  note(pdf,18,249,174,17,'מודל תעריף','₪0.48 לקוט״ש שנמכר + עלייה של כ-4% לערך הצריכה העצמית.');
+  note(pdf,18,270,174,12,'תוספת אורבנית',c.v.urbanEligible?`כן — תוספת ₪0.06 לקוט״ש ב-10 השנים הראשונות${c.v.urbanLocality?` (${c.v.urbanLocality})`:''}.`:'לא חושבה תוספת אורבנית.');
+}
 
-  gradientBand(pdf, 18, 165, 174, 34, 'סיכום הבדיקה',
-    'הנתונים מציגים סדר גודל ראשוני של התאמת הגג, הייצור, החיסכון והחזר ההשקעה. החישוב ישמש בסיס לשיחה מקצועית עם נציג Solatrix Energy.');
-
-  const facts = [
-    ['שם הלקוח', ctx.customer.name || '—'],
-    ['כתובת', ctx.roof.address || ctx.model.address || '—'],
-    ['שטח שסומן', ctx.values.roofArea ? `${formatNumber(ctx.values.roofArea)} m²` : '—'],
-    ['הופק בתאריך', ctx.generatedAt]
+function page3(pdf,c){
+  base(pdf,3,c.logo);
+  rtl(pdf,'איך מתקדמים מכאן?',192,45,11,'bold',C.navy);
+  const steps=[
+    [1,'שיחת היכרות','נציג Solatrix יעבור איתכם על הנתונים ויבין את מטרות הפרויקט.','users'],
+    [2,'בדיקת מסמכים','נבדוק חשבונות חשמל, בעלות, חיבור קיים ונתוני הגג.','doc'],
+    [3,'בדיקת שטח','מודד או מהנדס יבדוק את השטח, ההצללות, החשמל והקונסטרוקציה.','worker'],
+    [4,'הצעה מלאה','תקבלו תכנון והצעה מסודרת עם ציוד, מחיר, לוחות זמנים ותשואה.','check']
   ];
-  facts.forEach(([label, value], i) => {
-    const x = i % 2 === 0 ? 107 : 18;
-    const y = i < 2 ? 207 : 232;
-    factCard(pdf, x, y, 85, 20, label, value);
-  });
+  steps.forEach((s,i)=>step(pdf,18,54+i*31,174,27,...s));
+  cover(pdf,c.family,18,182,174,51,5);
+  whatsappBand(pdf,18,238,174,21);
+  brandBand(pdf,18,263,174,17,c.logo);
 }
 
-function drawPageTwo(pdf, ctx) {
-  pageBase(pdf, 'נתוני החישוב', 2, ctx.logo);
-  addCoverImage(pdf, ctx.installers, 18, 36, 106, 48, 7);
-  darkCard(pdf, 128, 36, 64, 48, 'המספר המרכזי', `${formatNumber(ctx.values.annualProduction)} kWh`,
-    'ייצור שנתי משוער של המערכת בהתאם להספק ולשטח הגג.');
+function metric(pdf,x,y,w,h,label,value,suffix,icon){ card(pdf,x,y,w,h); iconDraw(pdf,icon,x+10,y+h/2); rtl(pdf,label,x+w-7,y+10,4,'bold',C.grey); ltr(pdf,value,x+w/2+6,y+21,8.2,'bold',C.navy,'center'); if(suffix) rtl(pdf,suffix,x+w/2+17,y+25.5,3.2,'normal',C.grey); }
+function fact(pdf,x,y,w,h,label,value,icon,isLtr=false){ card(pdf,x,y,w,h); iconDraw(pdf,icon,x+10,y+h/2); rtl(pdf,label,x+w-7,y+8,3.5,'normal',C.grey); isLtr?ltr(pdf,value,x+w-7,y+16.5,5,'bold',C.navy,'right'):rtl(pdf,value,x+w-7,y+16.5,5,'bold',C.navy,w-24); }
+function band(pdf,x,y,w,h,title,text){ round(pdf,x,y,w,h,C.navy,C.navy,6); rtl(pdf,title,x+w-8,y+13,7,'bold',C.white); rtl(pdf,text,x+w-8,y+23,4,'normal',[230,237,242],w-16); }
+function darkMain(pdf,x,y,w,h,title,value,text){ round(pdf,x,y,w,h,C.navy,C.navy,6); iconDraw(pdf,'bolt',x+w/2,y+13,C.orange); rtl(pdf,title,x+w-8,y+31,5,'bold',C.white); ltr(pdf,value,x+w/2,y+44,8.2,'bold',C.white,'center'); rtl(pdf,text,x+w-8,y+56,4,'normal',[225,233,239],w-16); }
+function resultRow(pdf,x,y,w,h,label,value){ card(pdf,x,y,w,h,3); rtl(pdf,label,x+w-5,y+7,3.4,'normal',C.grey); ltr(pdf,value,x+5,y+7,4,'bold',C.navy,'left'); }
+function projectFact(pdf,x,y,w,h,label,value,icon,isLtr=false){ card(pdf,x,y,w,h,4); iconDraw(pdf,icon,x+9,y+h/2); rtl(pdf,label,x+w-6,y+8,3.4,'bold',C.grey); isLtr?ltr(pdf,value,x+w-6,y+17,4.6,'bold',C.navy,'right'):rtl(pdf,value,x+w-6,y+17,4.8,'bold',C.navy); }
+function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+6.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+12.5,3.4,'normal',C.grey,w-12); }
+function sectionTitle(pdf,text,x,y){ rtl(pdf,text,x,y,5.4,'bold',C.navy); }
+function step(pdf,x,y,w,h,n,title,text,icon){ card(pdf,x,y,w,h,5); pdf.setFillColor(...C.navy); pdf.circle(x+w-10,y+h/2,6,'F'); ltr(pdf,String(n),x+w-10,y+h/2+1.8,5,'bold',C.white,'center'); iconDraw(pdf,icon,x+11,y+h/2); rtl(pdf,title,x+w-22,y+10,5.3,'bold',C.navy); rtl(pdf,text,x+w-22,y+18,3.5,'normal',C.grey,w-45); }
+function whatsappBand(pdf,x,y,w,h){ round(pdf,x,y,w,h,C.navy,C.navy,5); pdf.setDrawColor(...C.green); pdf.setLineWidth(1); pdf.circle(x+10,y+h/2,5,'S'); ltr(pdf,'✓',x+10,y+h/2+1.7,4.5,'bold',C.green,'center'); rtl(pdf,'עותק הדוח נשמר בכרטיס הלקוח',x+w-8,y+8,5,'bold',C.white); rtl(pdf,'וניתן יהיה לשלוח אותו ב-WhatsApp לאחר חיבור ערוץ ההודעות העסקי.',x+w-8,y+15,3.7,'normal',[230,237,242],w-26); }
+function brandBand(pdf,x,y,w,h,logo){ round(pdf,x,y,w,h,C.navy,C.navy,5); if(logo) contain(pdf,logo,x+4,y+2,28,h-4); ltr(pdf,'Solatrix Energy',x+w-8,y+7,5.2,'bold',C.orange,'right'); rtl(pdf,'תכנון, התקנה וליווי מקצועי של מערכות סולאריות ואגירת אנרגיה.',x+w-8,y+13,3.4,'normal',C.white,w-45); }
 
-  rtlText(pdf, 'המספרים מאחורי ההערכה', 192, 100, 10, 'bold', C.navy);
-  const rows = [
-    [ctx.firstYearLabel, formatMoney(ctx.values.annualSavings)],
-    ['החזר כולל מע״מ', ctx.values.paybackWithVat.toFixed(1)],
-    ['עלות לפני מע״מ', formatMoney(ctx.values.costBeforeVat)],
-    ['עלות כולל מע״מ', formatMoney(ctx.values.costWithVat)],
-    ['שטח גג מסומן', `${formatNumber(ctx.values.roofArea)} m²`],
-    ['שטח גג שמיש', `${formatNumber(ctx.values.usableArea)} m²`],
-    ['מספר פאנלים', formatNumber(ctx.values.panels)],
-    ['ייצור שנתי', `${formatNumber(ctx.values.annualProduction)} kWh`]
-  ];
-  rows.forEach(([label, value], index) => numberRow(pdf, 18, 109 + index * 13, 174, 10.5, label, value));
+function card(pdf,x,y,w,h,r=5){ round(pdf,x,y,w,h,C.white,C.border,r); }
+function round(pdf,x,y,w,h,fill,stroke,r){ pdf.setFillColor(...fill); pdf.setDrawColor(...stroke); pdf.setLineWidth(.25); pdf.roundedRect(x,y,w,h,r,r,'FD'); }
 
-  roundedBox(pdf, 18, 216, 174, 25, C.paleOrange, [240, 197, 104], 5);
-  rtlText(pdf, `מודל תעריף: ${ctx.tariffText}.`, 187, 225, 4.1, 'bold', [89, 99, 107]);
-  rtlText(pdf, `תוספת אורבנית: ${ctx.urbanText}.`, 187, 232, 4.1, 'bold', [89, 99, 107]);
-
-  rtlText(pdf, 'נתוני גג ותעריף', 192, 251, 7.6, 'bold', C.navy);
-  const small = [
-    ['סוג גג', ctx.values.isCommercial ? 'מסחרי' : 'ביתי'],
-    ['תוספת אורבנית', ctx.values.urbanEligible ? 'כן' : 'לא'],
-    ['חשבון חודשי', ctx.values.monthlyBill ? `₪${formatNumber(ctx.values.monthlyBill)}` : '—'],
-    ['מספר WhatsApp', ctx.customer.phone || '—']
-  ];
-  small.forEach(([label, value], i) => {
-    const x = i % 2 === 0 ? 107 : 18;
-    const y = i < 2 ? 256 : 275;
-    smallFact(pdf, x, y, 85, 16, label, value);
-  });
+function iconDraw(pdf,type,cx,cy,color=C.orange){ pdf.setDrawColor(...color); pdf.setTextColor(...color); pdf.setLineWidth(.6); const r=4;
+  if(type==='coins'){pdf.circle(cx-1,cy-2,3,'S');pdf.ellipse(cx-1,cy+1,3,1.2,'S');pdf.ellipse(cx-1,cy+4,3,1.2,'S');}
+  else if(type==='clock'){pdf.circle(cx,cy,4,'S');pdf.line(cx,cy,cx,cy-2.5);pdf.line(cx,cy,cx+2,cy+1);}
+  else if(type==='calc'){pdf.rect(cx-3,cy-4,6,8,'S');pdf.line(cx-2,cy-1,cx+2,cy-1);}
+  else if(type==='tag'){pdf.rect(cx-3,cy-3,6,6,'S');pdf.circle(cx+1.5,cy-1.5,.5,'S');}
+  else if(type==='pin'){pdf.circle(cx,cy-1,3,'S');pdf.line(cx-2,cy+1,cx,cy+5);pdf.line(cx+2,cy+1,cx,cy+5);}
+  else if(type==='user'){pdf.circle(cx,cy-2,2,'S');pdf.arc(cx,cy+4,4,4,200,340,'S');}
+  else if(type==='calendar'){pdf.rect(cx-4,cy-3,8,7,'S');pdf.line(cx-4,cy-1,cx+4,cy-1);}
+  else if(type==='area'){pdf.rect(cx-4,cy-4,8,8,'S');pdf.line(cx-4,cy,cx+4,cy);pdf.line(cx,cy-4,cx,cy+4);}
+  else if(type==='bolt'){ltr(pdf,'⚡',cx,cy+2,8,'bold',color,'center');}
+  else if(type==='home'){pdf.line(cx-4,cy,cx,cy-4);pdf.line(cx,cy-4,cx+4,cy);pdf.rect(cx-3,cy,6,4,'S');}
+  else if(type==='building'){pdf.rect(cx-3,cy-4,6,8,'S');pdf.line(cx,cy-4,cx,cy+4);}
+  else if(type==='bill'){pdf.rect(cx-3,cy-4,6,8,'S');pdf.line(cx-2,cy-1,cx+2,cy-1);pdf.line(cx-2,cy+1,cx+2,cy+1);}
+  else if(type==='whatsapp'){pdf.circle(cx,cy,4,'S');ltr(pdf,'✓',cx,cy+1.5,4,'bold',color,'center');}
+  else if(type==='users'){pdf.circle(cx-2,cy-2,1.5,'S');pdf.circle(cx+2,cy-2,1.5,'S');pdf.line(cx-4,cy+3,cx+4,cy+3);}
+  else if(type==='doc'){pdf.rect(cx-3,cy-4,6,8,'S');pdf.line(cx-2,cy-1,cx+2,cy-1);}
+  else if(type==='worker'){pdf.circle(cx,cy-2,2,'S');pdf.arc(cx,cy+4,4,4,200,340,'S');pdf.line(cx-3,cy-4,cx+3,cy-4);}
+  else if(type==='check'){pdf.rect(cx-3,cy-4,6,8,'S');ltr(pdf,'✓',cx,cy+1.5,4,'bold',color,'center');}
 }
 
-function drawPageThree(pdf, ctx) {
-  pageBase(pdf, 'השלבים הבאים', 3, ctx.logo);
-  rtlText(pdf, 'איך מתקדמים מכאן?', 192, 55, 11.2, 'bold', C.navy);
+function rtl(pdf,text,x,y,size,style='normal',color=C.navy,maxWidth){ pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(true);const t=String(text??'');const lines=maxWidth?pdf.splitTextToSize(t,maxWidth):t;pdf.text(lines,x,y,{align:'right'});pdf.setR2L(false); }
+function ltr(pdf,text,x,y,size,style='normal',color=C.navy,align='left'){ pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(false);pdf.text(String(text??''),x,y,{align}); }
+function mm(v){return v*2.8346457;}
 
-  const steps = [
-    [1, 'שיחת היכרות', 'נציג Solatrix יעבור איתכם על הנתונים ויבין את מטרות הפרויקט.'],
-    [2, 'בדיקת מסמכים', 'נבדוק חשבונות חשמל, בעלות, חיבור קיים ונתוני הגג.'],
-    [3, 'בדיקת שטח', 'מודד או מהנדס יבדוק את השטח, ההצללות, החשמל והקונסטרוקציה.'],
-    [4, 'הצעה מלאה', 'תקבלו תכנון והצעה מסודרת עם ציוד, מחיר, לוחות זמנים ותשואה.']
-  ];
-  steps.forEach(([number, title, text], i) => {
-    const x = i % 2 === 0 ? 107 : 18;
-    const y = i < 2 ? 64 : 104;
-    processCard(pdf, x, y, 85, 35, number, title, text);
-  });
+async function installFonts(pdf){const [r,b]=await Promise.all([fetchBase64(HEEBO_REGULAR_URL),fetchBase64(HEEBO_BOLD_URL)]);pdf.addFileToVFS('Heebo-Regular.ttf',r);pdf.addFileToVFS('Heebo-Bold.ttf',b);pdf.addFont('Heebo-Regular.ttf','Heebo','normal');pdf.addFont('Heebo-Bold.ttf','Heebo','bold');}
+async function fetchBase64(url){const res=await fetch(url,{mode:'cors',cache:'force-cache'});if(!res.ok)throw new Error(`Font request failed: ${res.status}`);const bytes=new Uint8Array(await res.arrayBuffer());let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(s);}
+async function loadImageData(url,max=3000){try{const res=await fetch(url,{mode:'cors',cache:'no-cache'});if(!res.ok)throw new Error(res.status);const blob=await res.blob();const bitmap=await createImageBitmap(blob);const scale=Math.min(1,max/bitmap.width);const w=Math.round(bitmap.width*scale),h=Math.round(bitmap.height*scale);const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(bitmap,0,0,w,h);bitmap.close?.();return{data:canvas.toDataURL('image/jpeg',.98),width:w,height:h};}catch(e){console.warn('Image load failed',url,e);return null;}}
+function cover(pdf,image,x,y,w,h,r=0){if(!image)return;const sr=image.width/image.height,tr=w/h;let dw=w,dh=h,dx=x,dy=y;if(sr>tr){dw=h*sr;dx=x-(dw-w)/2;}else{dh=w/sr;dy=y-(dh-h)/2;}pdf.saveGraphicsState();pdf.roundedRect(x,y,w,h,r,r,null);pdf.clip();pdf.addImage(image.data,'JPEG',dx,dy,dw,dh,undefined,'NONE');pdf.restoreGraphicsState();}
+function contain(pdf,image,x,y,w,h){if(!image)return;const ratio=Math.min(w/image.width,h/image.height),dw=image.width*ratio,dh=image.height*ratio;pdf.addImage(image.data,'JPEG',x+(w-dw)/2,y+(h-dh)/2,dw,dh,undefined,'NONE');}
 
-  addCoverImage(pdf, ctx.family, 18, 148, 174, 52, 7);
-  roundedBox(pdf, 18, 207, 174, 31, C.paleGreen, C.greenBorder, 6);
-  rtlText(pdf, 'הדוח נשמר ב-Solatrix', 187, 220, 7.2, 'bold', C.navy);
-  rtlText(pdf, 'העתק הדוח נשמר בכרטיס הלקוח וניתן יהיה לשלוח אותו ל-WhatsApp לאחר חיבור ערוץ ההודעות העסקי.', 187, 230, 4.2, 'bold', [71, 112, 95], 160);
-  gradientBand(pdf, 18, 245, 174, 34, 'Solatrix Energy',
-    'מערכות סולאריות, אגירה וליווי מקצועי משלב הבדיקה ועד הפעלת המערכת.');
-}
-
-function pageBase(pdf, title, page, logo) {
-  pdf.setFillColor(...C.bg);
-  pdf.rect(0, 0, 210, 297, 'F');
-  if (logo) addContainImage(pdf, logo, 158, 10, 34, 18);
-  rtlText(pdf, title, 60, 19, 4.8, 'bold', [114, 128, 140]);
-  pdf.setDrawColor(245, 161, 26);
-  pdf.setLineWidth(0.35);
-  pdf.line(18, 30, 192, 30);
-  pdf.setDrawColor(220, 216, 207);
-  pdf.setLineWidth(0.25);
-  pdf.line(18, 286, 192, 286);
-  ltrText(pdf, `${page} / 3`, 18, 291.5, 3.3, 'bold', [118, 131, 141]);
-  ltrText(pdf, 'Solatrix Energy • Roof Check', 192, 291.5, 3.3, 'bold', [118, 131, 141], 'right');
-}
-
-function metricCard(pdf, x, y, w, h, label, value) {
-  roundedBox(pdf, x, y, w, h, C.white, C.lightBorder, 6);
-  rtlText(pdf, label, x + w - 5, y + 8, 4, 'bold', C.grey);
-  ltrText(pdf, value, x + w - 5, y + 17.2, 7.2, 'bold', C.navy, 'right');
-}
-
-function factCard(pdf, x, y, w, h, label, value) {
-  roundedBox(pdf, x, y, w, h, C.white, C.lightBorder, 6);
-  rtlText(pdf, label, x + w - 5, y + 7, 3.7, 'bold', C.grey);
-  rtlText(pdf, String(value), x + w - 5, y + 15.2, 5.2, 'bold', C.navy, w - 10);
-}
-
-function numberRow(pdf, x, y, w, h, label, value) {
-  roundedBox(pdf, x, y, w, h, C.white, C.lightBorder, 4);
-  rtlText(pdf, label, x + w - 4, y + 6.8, 3.7, 'bold', C.grey);
-  ltrText(pdf, value, x + 5, y + 6.8, 4.1, 'bold', C.navy, 'left');
-}
-
-function smallFact(pdf, x, y, w, h, label, value) {
-  roundedBox(pdf, x, y, w, h, C.white, C.lightBorder, 5);
-  rtlText(pdf, label, x + w - 5, y + 6, 3.4, 'bold', C.grey);
-  rtlText(pdf, String(value), x + w - 5, y + 13, 5.4, 'bold', C.navy, w - 10);
-}
-
-function processCard(pdf, x, y, w, h, number, title, text) {
-  roundedBox(pdf, x, y, w, h, C.white, C.lightBorder, 6);
-  pdf.setFillColor(...C.orange);
-  pdf.circle(x + w - 10, y + 10, 5.5, 'F');
-  ltrText(pdf, String(number), x + w - 10, y + 11.7, 5.3, 'bold', C.white, 'center');
-  rtlText(pdf, title, x + w - 8, y + 22, 6.2, 'bold', C.navy);
-  rtlText(pdf, text, x + w - 8, y + 29.5, 3.7, 'bold', [111, 124, 134], w - 16);
-}
-
-function darkCard(pdf, x, y, w, h, label, value, text) {
-  roundedBox(pdf, x, y, w, h, C.navy, C.navy, 7);
-  rtlText(pdf, label, x + w - 7, y + 12, 4.6, 'normal', C.white);
-  ltrText(pdf, value, x + w - 7, y + 24, 8.5, 'bold', C.orange, 'right');
-  rtlText(pdf, text, x + w - 7, y + 35, 4.1, 'bold', [220, 230, 237], w - 14);
-}
-
-function gradientBand(pdf, x, y, w, h, title, text) {
-  roundedBox(pdf, x, y, w, h, C.blue, C.blue, 7);
-  pdf.setFillColor(...C.navy);
-  pdf.roundedRect(x, y, w * 0.58, h, 7, 7, 'F');
-  pdf.setFillColor(245, 161, 26);
-  pdf.setGState?.(new pdf.GState({ opacity: 0.12 }));
-  pdf.circle(x + 6, y + 4, 18, 'F');
-  pdf.setGState?.(new pdf.GState({ opacity: 1 }));
-  rtlText(pdf, title, x + w - 7, y + 14, 7.4, 'bold', C.white);
-  rtlText(pdf, text, x + w - 7, y + 24, 4.2, 'bold', [220, 230, 237], w - 14);
-}
-
-function roundedBox(pdf, x, y, w, h, fill, stroke, radius) {
-  pdf.setFillColor(...fill);
-  pdf.setDrawColor(...stroke);
-  pdf.setLineWidth(0.25);
-  pdf.roundedRect(x, y, w, h, radius, radius, 'FD');
-}
-
-function rtlText(pdf, text, x, y, size, style = 'normal', color = C.navy, maxWidth) {
-  pdf.setFont('Heebo', style);
-  pdf.setFontSize(mmToPt(size));
-  pdf.setTextColor(...color);
-  pdf.setR2L(true);
-  const value = String(text ?? '');
-  const lines = maxWidth ? pdf.splitTextToSize(value, maxWidth) : value;
-  pdf.text(lines, x, y, { align: 'right', baseline: 'alphabetic' });
-  pdf.setR2L(false);
-}
-
-function ltrText(pdf, text, x, y, size, style = 'normal', color = C.navy, align = 'left') {
-  pdf.setFont('Heebo', style);
-  pdf.setFontSize(mmToPt(size));
-  pdf.setTextColor(...color);
-  pdf.setR2L(false);
-  pdf.text(String(text ?? ''), x, y, { align, baseline: 'alphabetic' });
-}
-
-function mmToPt(mm) { return mm * 2.8346457; }
-
-async function installFonts(pdf) {
-  try {
-    const [regular, bold] = await Promise.all([fetchBase64(HEEBO_REGULAR_URL), fetchBase64(HEEBO_BOLD_URL)]);
-    pdf.addFileToVFS('Heebo-Regular.ttf', regular);
-    pdf.addFileToVFS('Heebo-Bold.ttf', bold);
-    pdf.addFont('Heebo-Regular.ttf', 'Heebo', 'normal');
-    pdf.addFont('Heebo-Bold.ttf', 'Heebo', 'bold');
-  } catch (error) {
-    console.error('Unable to embed Heebo in PDF.', error);
-    throw new Error('לא ניתן לטעון את הגופן הדרוש ליצירת הדוח. נסו שוב.');
-  }
-}
-
-async function fetchBase64(url) {
-  const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
-  if (!response.ok) throw new Error(`Font request failed: ${response.status}`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  return btoa(binary);
-}
-
-async function loadImageData(url, maxPixelsWide = 3000) {
-  try {
-    const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
-    if (!response.ok) throw new Error(`Image request failed: ${response.status}`);
-    const blob = await response.blob();
-    const bitmap = await createImageBitmap(blob);
-    const scale = Math.min(1, maxPixelsWide / bitmap.width);
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d', { alpha: false });
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, width, height);
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = 'high';
-    context.drawImage(bitmap, 0, 0, width, height);
-    bitmap.close?.();
-    return { data: canvas.toDataURL('image/jpeg', 0.98), width, height };
-  } catch (error) {
-    console.warn('Unable to load PDF image:', url, error);
-    return null;
-  }
-}
-
-function addCoverImage(pdf, image, x, y, w, h, radius = 0) {
-  if (!image) return;
-  const sourceRatio = image.width / image.height;
-  const targetRatio = w / h;
-  let drawW = w;
-  let drawH = h;
-  let drawX = x;
-  let drawY = y;
-  if (sourceRatio > targetRatio) {
-    drawW = h * sourceRatio;
-    drawX = x - (drawW - w) / 2;
-  } else {
-    drawH = w / sourceRatio;
-    drawY = y - (drawH - h) / 2;
-  }
-  pdf.saveGraphicsState();
-  pdf.roundedRect(x, y, w, h, radius, radius, null);
-  pdf.clip();
-  pdf.addImage(image.data, 'JPEG', drawX, drawY, drawW, drawH, undefined, 'NONE');
-  pdf.restoreGraphicsState();
-}
-
-function addContainImage(pdf, image, x, y, w, h) {
-  if (!image) return;
-  const ratio = Math.min(w / image.width, h / image.height);
-  const drawW = image.width * ratio;
-  const drawH = image.height * ratio;
-  pdf.addImage(image.data, 'JPEG', x + (w - drawW) / 2, y + (h - drawH) / 2, drawW, drawH, undefined, 'NONE');
-}
-
-function createReportValues({ model, entries, roof, surfaceArea }) {
-  const find = (...parts) => {
-    const match = entries.find(([label]) => parts.every((part) => String(label).includes(part)));
-    return match?.[1];
-  };
-  const value = (modelValue, fallback, defaultValue = 0) => {
-    const number = Number(modelValue);
-    if (Number.isFinite(number)) return number;
-    const parsed = parseNumeric(fallback);
-    return Number.isFinite(parsed) ? parsed : defaultValue;
-  };
-
-  const roofArea = value(model.roofArea, find('שטח גג', 'מסומן') || find('שטח גג') || surfaceArea, surfaceArea);
-  const usableArea = value(model.usableArea, find('שטח גג', 'שמיש') || find('שטח שימושי'), roofArea * 0.82);
-  const annualProduction = value(model.annualProduction, find('ייצור שנתי'));
-  const annualSavings = value(model.annualSavings, find('חיסכון בשנה הראשונה') || find('הכנסה בשנה הראשונה') || find('חיסכון/הכנסה שנתית') || find('metric_'));
-  const costBeforeVat = value(model.costBeforeVat, find('עלות לפני מע״מ'));
-  const costWithVat = value(model.costWithVat, find('עלות כולל מע״מ'), costBeforeVat * 1.18);
-  const paybackWithVat = value(model.paybackWithVat, find('החזר כולל מע״מ') || find('החזר השקעה'), annualSavings ? costWithVat / annualSavings : 0);
-  const panels = value(model.panels, find('מספר פאנלים') || find('פאנלים'));
-  const monthlyBill = value(model.monthlyBill, roof.monthlyBill);
-
-  return {
-    roofArea,
-    usableArea,
-    annualProduction,
-    annualSavings,
-    costBeforeVat,
-    costWithVat,
-    paybackWithVat,
-    panels,
-    monthlyBill,
-    isCommercial: model.isCommercial === true || roof.roofType === 'commercial',
-    urbanEligible: model.urbanEligible === true || roof.urbanEligible === true,
-    urbanLocality: model.urbanLocality || roof.urbanLocality || ''
-  };
-}
-
-function parseNumeric(value) {
-  if (typeof value === 'number') return value;
-  const normalized = String(value ?? '').replace(/,/g, '').replace(/[^0-9.\-]/g, '');
-  return normalized ? Number(normalized) : NaN;
-}
-function formatNumber(value) { return Math.round(Number(value) || 0).toLocaleString('he-IL'); }
-function formatMoney(value) { return `₪${formatNumber(value)}`; }
+function createReportValues({model,entries,roof,surfaceArea}){const find=(...p)=>entries.find(([l])=>p.every(v=>String(l).includes(v)))?.[1];const val=(a,b,d=0)=>{const n=Number(a);if(Number.isFinite(n))return n;const q=parseNumeric(b);return Number.isFinite(q)?q:d;};const roofArea=val(model.roofArea,find('שטח גג','מסומן')||find('שטח גג')||surfaceArea,surfaceArea);const usableArea=val(model.usableArea,find('שטח גג','שמיש')||find('שטח שימושי'),roofArea*.82);const annualProduction=val(model.annualProduction,find('ייצור שנתי'));const annualSavings=val(model.annualSavings,find('חיסכון בשנה הראשונה')||find('הכנסה בשנה הראשונה')||find('חיסכון/הכנסה שנתית'));const costBeforeVat=val(model.costBeforeVat,find('עלות לפני מע״מ'));const costWithVat=val(model.costWithVat,find('עלות כולל מע״מ'),costBeforeVat*1.18);const paybackWithVat=val(model.paybackWithVat,find('החזר כולל מע״מ')||find('החזר השקעה'),annualSavings?costWithVat/annualSavings:0);return{roofArea,usableArea,annualProduction,annualSavings,costBeforeVat,costWithVat,paybackWithVat,panels:val(model.panels,find('מספר פאנלים')||find('פאנלים')),monthlyBill:val(model.monthlyBill,roof.monthlyBill),isCommercial:model.isCommercial===true||roof.roofType==='commercial',urbanEligible:model.urbanEligible===true||roof.urbanEligible===true,urbanLocality:model.urbanLocality||roof.urbanLocality||''};}
+function parseNumeric(v){if(typeof v==='number')return v;const s=String(v??'').replace(/,/g,'').replace(/[^0-9.\-]/g,'');return s?Number(s):NaN;}
+function num(v){return Math.round(Number(v)||0).toLocaleString('he-IL');}
+function money(v){return `₪${num(v)}`;}
