@@ -18,6 +18,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout production
         uses: actions/checkout@v4
@@ -26,8 +29,8 @@ jobs:
         run: |
           curl -fsSL \
             https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/a6bba1a/index.html \
-            -o index.html
-          grep -q "solatrix-v34-visual" index.html
+            -o "$GITHUB_WORKSPACE/index.html"
+          grep -q "solatrix-v34-visual" "$GITHUB_WORKSPACE/index.html"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -39,34 +42,20 @@ jobs:
 
       - name: Build production
         run: |
-          rm -rf dist
-          npx vite build --outDir dist --emptyOutDir
+          rm -rf "$GITHUB_WORKSPACE/dist"
+          npx vite build "$GITHUB_WORKSPACE" --outDir "$GITHUB_WORKSPACE/dist" --emptyOutDir
           echo "Generated files:"
-          find dist -maxdepth 5 -type f -print | sort
-
-      - name: Normalize homepage artifact
-        run: |
-          if [ ! -f dist/index.html ]; then
-            candidate="$(find dist -mindepth 2 -type f -name index.html -print -quit)"
-            if [ -n "$candidate" ]; then
-              echo "Using generated homepage candidate: $candidate"
-              cp "$candidate" dist/index.html
-            else
-              echo "No generated homepage was found. Current dist contents:"
-              find dist -maxdepth 5 -print || true
-              exit 1
-            fi
-          fi
+          find "$GITHUB_WORKSPACE/dist" -maxdepth 5 -type f -print | sort
 
       - name: Verify production artifact
         run: |
-          test -f dist/index.html
-          grep -q "hero-preview-card" dist/index.html
-          if grep -R -n -F '<div aria-label="פעולות מהירות" class="mobile-bottom-cta">' dist; then
+          test -f "$GITHUB_WORKSPACE/dist/index.html"
+          grep -q "hero-preview-card" "$GITHUB_WORKSPACE/dist/index.html"
+          if grep -R -n -F '<div aria-label="פעולות מהירות" class="mobile-bottom-cta">' "$GITHUB_WORKSPACE/dist"; then
             echo 'Persistent mobile contact dock is still present in the production artifact.'
             exit 1
           fi
-          touch dist/.nojekyll
+          touch "$GITHUB_WORKSPACE/dist/.nojekyll"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -74,7 +63,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: ${{ github.workspace }}/dist
 
   deploy:
     environment:
