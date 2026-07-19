@@ -101,13 +101,13 @@ function brandBand(pdf,x,y,w,h,logo){ round(pdf,x,y,w,h,C.navy,C.navy,5); if(log
 function card(pdf,x,y,w,h,r=5){ round(pdf,x,y,w,h,C.white,C.border,r); }
 function round(pdf,x,y,w,h,fill,stroke,r){ pdf.setFillColor(...fill); pdf.setDrawColor(...stroke); pdf.setLineWidth(.25); pdf.roundedRect(x,y,w,h,r,r,'FD'); }
 
-function iconDraw(pdf,type,cx,cy,color=C.orange){ pdf.setDrawColor(...color); pdf.setTextColor(...color); pdf.setLineWidth(.6); const r=4;
+function iconDraw(pdf,type,cx,cy,color=C.orange){ pdf.setDrawColor(...color); pdf.setTextColor(...color); pdf.setLineWidth(.6);
   if(type==='coins'){pdf.circle(cx-1,cy-2,3,'S');pdf.ellipse(cx-1,cy+1,3,1.2,'S');pdf.ellipse(cx-1,cy+4,3,1.2,'S');}
   else if(type==='clock'){pdf.circle(cx,cy,4,'S');pdf.line(cx,cy,cx,cy-2.5);pdf.line(cx,cy,cx+2,cy+1);}
   else if(type==='calc'){pdf.rect(cx-3,cy-4,6,8,'S');pdf.line(cx-2,cy-1,cx+2,cy-1);}
   else if(type==='tag'){pdf.rect(cx-3,cy-3,6,6,'S');pdf.circle(cx+1.5,cy-1.5,.5,'S');}
   else if(type==='pin'){pdf.circle(cx,cy-1,3,'S');pdf.line(cx-2,cy+1,cx,cy+5);pdf.line(cx+2,cy+1,cx,cy+5);}
-  else if(type==='user'){pdf.circle(cx,cy-2,2,'S');pdf.arc(cx,cy+4,4,4,200,340,'S');}
+  else if(type==='user'){pdf.circle(cx,cy-2,2,'S');pdf.line(cx-4,cy+4,cx-2.5,cy+1.5);pdf.line(cx-2.5,cy+1.5,cx+2.5,cy+1.5);pdf.line(cx+2.5,cy+1.5,cx+4,cy+4);}
   else if(type==='calendar'){pdf.rect(cx-4,cy-3,8,7,'S');pdf.line(cx-4,cy-1,cx+4,cy-1);}
   else if(type==='area'){pdf.rect(cx-4,cy-4,8,8,'S');pdf.line(cx-4,cy,cx+4,cy);pdf.line(cx,cy-4,cx,cy+4);}
   else if(type==='bolt'){ltr(pdf,'⚡',cx,cy+2,8,'bold',color,'center');}
@@ -117,7 +117,7 @@ function iconDraw(pdf,type,cx,cy,color=C.orange){ pdf.setDrawColor(...color); pd
   else if(type==='whatsapp'){pdf.circle(cx,cy,4,'S');ltr(pdf,'✓',cx,cy+1.5,4,'bold',color,'center');}
   else if(type==='users'){pdf.circle(cx-2,cy-2,1.5,'S');pdf.circle(cx+2,cy-2,1.5,'S');pdf.line(cx-4,cy+3,cx+4,cy+3);}
   else if(type==='doc'){pdf.rect(cx-3,cy-4,6,8,'S');pdf.line(cx-2,cy-1,cx+2,cy-1);}
-  else if(type==='worker'){pdf.circle(cx,cy-2,2,'S');pdf.arc(cx,cy+4,4,4,200,340,'S');pdf.line(cx-3,cy-4,cx+3,cy-4);}
+  else if(type==='worker'){pdf.circle(cx,cy-2,2,'S');pdf.line(cx-4,cy+4,cx-2.5,cy+1.5);pdf.line(cx-2.5,cy+1.5,cx+2.5,cy+1.5);pdf.line(cx+2.5,cy+1.5,cx+4,cy+4);pdf.line(cx-3,cy-4,cx+3,cy-4);}
   else if(type==='check'){pdf.rect(cx-3,cy-4,6,8,'S');ltr(pdf,'✓',cx,cy+1.5,4,'bold',color,'center');}
 }
 
