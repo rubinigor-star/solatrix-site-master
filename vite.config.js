@@ -34,23 +34,16 @@ function useUploadedPdfImages() {
   return {
     name: 'solatrix-uploaded-pdf-images',
     enforce: 'pre',
-    resolveId(source) {
-      return PDF_IMAGE_MODULES.get(source) || null;
-    },
-    load(id) {
-      const url = PDF_IMAGE_URLS[id];
-      return url ? `export default ${JSON.stringify(url)};` : null;
-    },
+    resolveId(source) { return PDF_IMAGE_MODULES.get(source) || null; },
+    load(id) { const url = PDF_IMAGE_URLS[id]; return url ? `export default ${JSON.stringify(url)};` : null; },
     transform(code, id) {
       if (!id.replace(/\\/g, '/').endsWith('/src/reportPdfClient.js')) return null;
       let patched = code;
       for (const [from, to] of PDF_COPY_REPLACEMENTS) patched = patched.split(from).join(to);
-      patched = patched.replace(
-        "function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+6.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+12.5,3.4,'normal',C.grey,w-12); }",
-        "function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+5.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+9.5,3.2,'normal',C.grey,w-12); }"
-      );
 
       patched = patched
+        .replace("function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+6.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+12.5,3.4,'normal',C.grey,w-12); }", "function note(pdf,x,y,w,h,title,text){ card(pdf,x,y,w,h,4); rtl(pdf,title,x+w-6,y+5.5,3.3,'bold',C.navy); rtl(pdf,text,x+w-6,y+9.5,3.2,'normal',C.grey,w-12); }")
+        .replace("  ltr(pdf,'Solatrix Energy • Roof Check',192,291.5,3.2,'normal',C.grey,'right');", "")
         .replace("pageBase(pdf, 'בדיקת גג סולארית ראשונית', 1, ctx.logo);", "pageBase(pdf, '', 1, ctx.logo);")
         .replace("`${ctx.values.paybackWithVat.toFixed(1)} שנים`", "ctx.values.paybackWithVat.toFixed(1)")
         .replace("rtlText(pdf, title, 60, 19, 4.8, 'bold', [114, 128, 140]);", "if (title) rtlText(pdf, title, 60, 19, 4.8, 'bold', [114, 128, 140]);")
@@ -64,7 +57,8 @@ function useUploadedPdfImages() {
         .replace("187, 230, 4.2", "187, 226, 4.2")
         .replace("gradientBand(pdf, 18, 245, 174, 34", "gradientBand(pdf, 18, 241, 174, 38")
         .replace("monthlyChart(pdf,25,105,160,45,projection.months);\n  ltr(pdf,`Total: ${num(c.v.annualProduction)} kWh`,25,155,3.3,'bold',C.navy,'left');", "monthlyChart(pdf,25,105,160,43,projection.months);\n  round(pdf,25,100,48,7,C.pale,C.border,3); ltr(pdf,`${num(c.v.annualProduction)} kWh`,49,104.7,3.1,'bold',C.navy,'center'); rtl(pdf,'ייצור שנתי',69,104.7,2.6,'normal',C.grey);")
-        .replace("cashflowChart(pdf,25,191,160,36,projection.cashflow,c.v.paybackWithVat);", "cashflowChart(pdf,25,190,160,37,projection.cashflow,c.v.paybackWithVat);");
+        .replace("cashflowChart(pdf,25,190,160,37,projection.cashflow,c.v.paybackWithVat);", "cashflowChart(pdf,25,195,160,31,projection.cashflow,c.v.paybackWithVat);")
+        .replace("cashflowChart(pdf,25,191,160,36,projection.cashflow,c.v.paybackWithVat);", "cashflowChart(pdf,25,195,160,31,projection.cashflow,c.v.paybackWithVat);");
 
       patched = patched.replace(
         /function monthlyChart\(pdf,x,y,w,h,months\)\{[\s\S]*?\n\}/,
@@ -76,7 +70,7 @@ function useUploadedPdfImages() {
     const bx=x+i*(barW+gap)+2.2,bh=(m.kwh/max)*(h-20);
     pdf.setFillColor(...C.orange);pdf.roundedRect(bx,baseY-bh,barW,bh,1.3,1.3,'F');
     ltr(pdf,num(m.kwh),bx+barW/2,baseY-bh-2,2.15,'bold',C.navy,'center');
-    ltr(pdf,m.label,bx+barW/2,baseY+4.2,2.35,'normal',C.grey,'center');
+    ltr(pdf,m.label,bx+barW/2,baseY+4.2,2.35,'bold',C.navy,'center');
     ltr(pdf,\`₪\${num(m.money)}\`,bx+barW/2,baseY+8.1,1.95,'normal',C.grey,'center');
   });
 }`
@@ -86,23 +80,52 @@ function useUploadedPdfImages() {
         /function cashflowChart\(pdf,x,y,w,h,points,payback\)\{[\s\S]*?\n\}/,
         `function cashflowChart(pdf,x,y,w,h,points,payback){
   const values=points.map(p=>p.value),actualMin=Math.min(...values),actualMax=Math.max(...values);
-  const min=actualMin*1.08,max=actualMax*1.08,range=Math.max(max-min,1);
+  const min=actualMin*1.12,max=actualMax*1.08,range=Math.max(max-min,1);
   const px=yr=>x+(yr/25)*w,py=v=>y+h-((v-min)/range)*h,zeroY=py(0);
+
+  const infoY=y-11,cellW=50;
+  const info=[
+    ['השקעה ראשונית',money(Math.abs(actualMin))],
+    ['נקודת איזון',payback.toFixed(1)+' שנים'],
+    ['תוצאה לאחר 25 שנה',money(actualMax)]
+  ];
+  info.forEach((item,i)=>{
+    const ix=x+i*55;
+    round(pdf,ix,infoY,cellW,9,C.pale,C.border,3);
+    rtl(pdf,item[0],ix+cellW-4,infoY+3.6,2.15,'bold',C.grey);
+    ltr(pdf,item[1],ix+cellW/2,infoY+7.2,2.7,'bold',C.navy,'center');
+  });
+
   pdf.setDrawColor(...C.grid);pdf.setLineWidth(.2);
-  [0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y+5,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+4.5,2.35,'normal',C.grey,'center');});
+  [0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+4.3,2.35,'normal',C.grey,'center');});
   pdf.setDrawColor(...C.orange);pdf.setLineWidth(.45);pdf.setLineDashPattern([1.5,1.2],0);pdf.line(x,zeroY,x+w,zeroY);pdf.setLineDashPattern([],0);
-  ltr(pdf,'0 ₪',x+w,zeroY-1.5,2.15,'bold',C.orange,'right');
+  ltr(pdf,'0 ₪',x+w,zeroY-1.3,2.05,'bold',C.orange,'right');
   pdf.setDrawColor(...C.blue);pdf.setLineWidth(1.15);
   for(let i=1;i<points.length;i++)pdf.line(px(points[i-1].year),py(points[i-1].value),px(points[i].year),py(points[i].value));
   const bx=px(payback),by=zeroY;
-  pdf.setDrawColor(...C.orange);pdf.setLineWidth(.4);pdf.setLineDashPattern([1.2,1.1],0);pdf.line(bx,y+8,bx,by);pdf.setLineDashPattern([],0);
+  pdf.setDrawColor(...C.orange);pdf.setLineWidth(.4);pdf.setLineDashPattern([1.2,1.1],0);pdf.line(bx,y,bx,by);pdf.setLineDashPattern([],0);
   pdf.setFillColor(...C.orange);pdf.circle(bx,by,2.2,'F');
-  const calloutX=Math.min(x+w-38,Math.max(x+3,bx-14));
-  round(pdf,calloutX,y,38,8,C.pale,C.border,3);
-  rtl(pdf,'נקודת איזון',calloutX+34,y+3.4,2.25,'normal',C.grey);
-  ltr(pdf,\`\${payback.toFixed(1)} שנים\`,calloutX+19,y+6.5,2.8,'bold',C.navy,'center');
-  round(pdf,x,y+7,30,9,C.pale,C.border,3);rtl(pdf,'השקעה ראשונית',x+27,y+10.5,2.05,'normal',C.grey);ltr(pdf,money(actualMin),x+15,y+14.2,2.55,'bold',C.navy,'center');
-  round(pdf,x+w-35,y+7,35,9,C.pale,C.border,3);rtl(pdf,'תוצאה בשנה 25',x+w-3,y+10.5,2.05,'normal',C.grey);ltr(pdf,money(actualMax),x+w-17.5,y+14.2,2.55,'bold',C.navy,'center');
+}`
+      );
+
+      patched = patched.replace(
+        /function summaryBand\(pdf,x,y,w,h,p,v\)\{[\s\S]*?\n\}/,
+        `function summaryBand(pdf,x,y,w,h,p,v){
+  round(pdf,x,y,w,h,C.navy,C.navy,5);
+  rtl(pdf,'סיכום פיננסי ל־25 שנה',x+w-7,y+8,4.5,'bold',C.orange);
+  const items=[
+    ['הכנסה מצטברת',money(p.totalIncome25)],
+    ['השקעה ראשונית',money(v.costWithVat)],
+    ['רווח נקי',money(p.netProfit25)],
+    ['תשואה כוללת',\`${Math.round(p.roi25)}%\`]
+  ];
+  const colW=w/4;
+  items.forEach((it,i)=>{
+    const cx=x+colW*i+colW/2;
+    if(i>0){pdf.setDrawColor(72,103,125);pdf.setLineWidth(.2);pdf.line(x+colW*i,y+13,x+colW*i,y+h-5);}
+    rtl(pdf,it[0],cx+colW/2-5,y+16,2.7,'bold',C.orange);
+    ltr(pdf,it[1],cx,y+27,4.35,'bold',C.white,'center');
+  });
 }`
       );
 
