@@ -14,7 +14,7 @@ html.solatrix-a11y-contrast a,html.solatrix-a11y-contrast button{outline-color:#
 html.solatrix-a11y-links a{outline:2px solid currentColor!important;outline-offset:3px!important;text-decoration:none!important}
 html:not(.solatrix-a11y-links) a,html:not(.solatrix-a11y-links) a:hover,html:not(.solatrix-a11y-links) a:focus{text-decoration:none!important}
 html.solatrix-a11y-motion *,html.solatrix-a11y-motion *::before,html.solatrix-a11y-motion *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
-.solatrix-a11y-trigger{position:fixed;left:18px;bottom:18px;z-index:99998;width:54px;height:54px;border:0;border-radius:50%;display:grid;place-items:center;background:#0a2f4a;color:#fff;box-shadow:0 12px 34px rgba(0,0,0,.28);font-size:27px;cursor:pointer}
+.solatrix-a11y-trigger{position:fixed;left:18px;bottom:18px;z-index:99998;width:54px;height:54px;border:0;border-radius:50%;display:grid;place-items:center;background:transparent!important;color:#0a2f4a;box-shadow:none!important;font-size:27px;cursor:pointer;padding:0}
 .solatrix-a11y-trigger:focus-visible,.solatrix-a11y-panel button:focus-visible{outline:3px solid #ffbf54;outline-offset:3px}
 .solatrix-a11y-panel{position:fixed;left:18px;bottom:82px;z-index:99999;width:min(310px,calc(100vw - 36px));padding:18px;border-radius:20px;background:#fff;color:#17212b;box-shadow:0 20px 60px rgba(0,0,0,.3);border:1px solid rgba(0,0,0,.12);font-family:Assistant,Arial,sans-serif;direction:rtl;display:none}
 .solatrix-a11y-panel[data-open="true"]{display:block}
