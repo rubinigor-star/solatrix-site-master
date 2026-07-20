@@ -1,264 +1,75 @@
-const CALCULATOR_MASTER_VERSION = 'roof-check-master-v1';
-const calculatorPath = 'roof-check/';
-const calculatorKeywords = [
-  /roof\s*check/i,
-  /check\s*roof/i,
-  /בדיקת\s*גג/,
-  /בדקו\s*את\s*הגג/,
-  /בדקו\s*גג/,
-  /התחילו\s*בבדיקת\s*הגג/,
-  /הגג\s*שלכם/,
-  /בדיקה\s*חכמה/,
-  /חישוב\s*גג/,
-  /קבלו\s*בדיקה/,
-  /ראו\s*את\s*הגג/,
-  /תראו\s*את\s*הגג/,
-  /צפו\s*בגג/,
-  /בדקו\s*התאמה/,
-  /расч[её]т/i,
-  /посмотр/i,
-  /провер/i,
-  /кры/i
-];
+const CALCULATOR_MASTER_VERSION='roof-check-master-v1';
+const calculatorKeywords=[/roof\s*check/i,/check\s*roof/i,/בדיקת\s*גג/,/בדקו\s*את\s*הגג/,/בדקו\s*גג/,/התחילו\s*בבדיקת\s*הגג/,/הגג\s*שלכם/,/בדיקה\s*חכמה/,/חישוב\s*גג/,/קבלו\s*בדיקה/,/ראו\s*את\s*הגג/,/תראו\s*את\s*הגג/,/צפו\s*בגג/,/בדקו\s*התאמה/,/расч[её]т/i,/посмотр/i,/провер/i,/кры/i];
+const contactKeywords=[/צור\s*קשר/,/השאירו\s*פרטים/,/קבלו\s*הצעה/,/השארת\s*פרטים/,/консульта/i,/заяв/i];
+const BEFORE='./assets/hero/igor-before.jpg';
+const AFTER='./assets/hero/igor-after.jpg';
 
-const contactKeywords = [
-  /צור\s*קשר/,
-  /השאירו\s*פרטים/,
-  /קבלו\s*הצעה/,
-  /השארת\s*פרטים/,
-  /консульта/i,
-  /заяв/i
-];
+function isCalculatorPage(){return /\/roof-check\/?$/.test(location.pathname)||/\/roof-check\//.test(location.pathname)}
+function isPrivateHomesPage(){return /\/private-homes(?:\.html)?\/?$/.test(location.pathname)}
+function siteRootUrl(){return new URL('./',location.href).href.replace(/private-homes\.html.*$/,'')}
+function calculatorUrl(){const u=new URL('roof-check/',siteRootUrl());u.searchParams.set('v',CALCULATOR_MASTER_VERSION);return u.href}
+function matches(text,patterns){const clean=(text||'').replace(/\s+/g,' ').trim();return patterns.some(p=>p.test(clean))}
 
-const IGOR_BEFORE = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/public/assets/hero/igor-before.jpg';
-const IGOR_AFTER = 'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/public/assets/hero/igor-after.jpg';
-
-function injectGlobalCleanupStyles() {
-  if (document.getElementById('solatrix-global-cleanup-style')) return;
-  const style = document.createElement('style');
-  style.id = 'solatrix-global-cleanup-style';
-  style.textContent = `
-    .mobile-bottom-cta,
-    .mobileBottomCta,
-    [class*="mobile-bottom-cta"]{
-      display:none !important;
-      visibility:hidden !important;
-      pointer-events:none !important;
-    }
-    .igor-roof-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;height:100%;min-height:220px;background:#fffaf2}
-    .igor-roof-pair figure{position:relative;margin:0;overflow:hidden;min-width:0}
-    .igor-roof-pair img{display:block;width:100%;height:100%;min-height:220px;object-fit:cover;object-position:center}
-    .igor-roof-pair figcaption{position:absolute;right:10px;bottom:10px;padding:6px 12px;border-radius:999px;background:rgba(7,27,47,.86);color:#fff;font-weight:800;font-size:14px;line-height:1}
-    @media(max-width:980px){body{padding-bottom:0 !important}.igor-roof-pair{gap:5px;min-height:220px}.igor-roof-pair img{min-height:220px}.igor-roof-pair figcaption{right:7px;bottom:7px;font-size:12px;padding:5px 9px}}
+function injectStyles(){
+  if(document.getElementById('solatrix-runtime-fix'))return;
+  const s=document.createElement('style');
+  s.id='solatrix-runtime-fix';
+  s.textContent=`
+    a{text-decoration:none!important}
+    .topbar a,.links a,.nav a,.nav-cta{text-decoration:none!important}
+    .mobile-bottom-cta,.mobileBottomCta,[class*="mobile-bottom-cta"]{display:none!important;visibility:hidden!important;pointer-events:none!important}
+    @media(max-width:980px){body{padding-bottom:0!important}}
+    .igor-approved-before-after{position:relative!important;overflow:hidden!important;min-height:320px!important;background:#10283b!important;border-radius:28px!important}
+    .igor-approved-before-after>img,.igor-approved-before-after .igor-after{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block!important}
+    .igor-approved-before-after .igor-after-wrap{position:absolute;inset:0;overflow:hidden;clip-path:inset(0 50% 0 0);animation:igorRoofReveal 7s ease-in-out infinite alternate}
+    .igor-approved-before-after .igor-divider{position:absolute;top:0;bottom:0;left:50%;width:3px;background:#fff;transform:translateX(-50%);box-shadow:0 0 20px rgba(0,0,0,.3);animation:igorDividerMove 7s ease-in-out infinite alternate;z-index:4}
+    .igor-approved-before-after .igor-divider span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:#f5a11a;color:#071b2f;font-size:22px;font-weight:900;box-shadow:0 10px 28px rgba(0,0,0,.28)}
+    .igor-approved-before-after .igor-label{position:absolute;bottom:14px;z-index:5;padding:7px 13px;border-radius:999px;background:rgba(7,27,47,.82);color:#fff;font-weight:800;font-size:14px}
+    .igor-label-before{right:14px}.igor-label-after{left:14px}
+    @keyframes igorRoofReveal{0%,12%{clip-path:inset(0 88% 0 0)}88%,100%{clip-path:inset(0 12% 0 0)}}
+    @keyframes igorDividerMove{0%,12%{left:12%}88%,100%{left:88%}}
+    @media(max-width:760px){.igor-approved-before-after{min-height:300px!important;border-radius:24px!important}.igor-approved-before-after .igor-divider span{width:42px;height:42px}.igor-approved-before-after .igor-label{font-size:12px;padding:6px 10px}}
   `;
-  document.head.appendChild(style);
+  document.head.appendChild(s);
 }
 
-function isCalculatorPage() {
-  return /\/roof-check\/?$/.test(window.location.pathname) || /\/roof-check\//.test(window.location.pathname);
+function normalizeOfficialUrl(){
+  if(!isPrivateHomesPage())return;
+  const params=new URLSearchParams(location.search);
+  if(params.get('official')==='1')history.replaceState({},'',new URL('./',location.href).pathname);
 }
 
-function isHomePage() {
-  const path = window.location.pathname.replace(/\/index\.html$/, '/');
-  return path.endsWith('/roof-check-by-solatrix/') || path === '/' || path.endsWith('/solatrix-site-master/');
-}
-
-function isPrivateHomesPage() {
-  return /\/private-homes(?:\.html)?\/?$/.test(window.location.pathname);
-}
-
-function siteRootUrl() {
-  const path = window.location.pathname;
-  const marker = '/roof-check-by-solatrix/';
-  const markerIndex = path.indexOf(marker);
-  if (markerIndex >= 0) return `${window.location.origin}${path.slice(0, markerIndex + marker.length)}`;
-  if (path.includes('/roof-check/')) return new URL('../', window.location.href).href;
-  return new URL('./', window.location.href).href;
-}
-
-function calculatorUrl() {
-  const url = new URL(calculatorPath, siteRootUrl());
-  url.searchParams.set('v', CALCULATOR_MASTER_VERSION);
-  return url.href;
-}
-
-function textMatches(text = '', patterns = calculatorKeywords) {
-  const clean = text.replace(/\s+/g, ' ').trim();
-  return patterns.some((pattern) => pattern.test(clean));
-}
-
-function hrefMatchesCalculator(href = '') {
-  return /roof-check(?:\.html|\/)?/i.test(href) || /#.*roof/i.test(href) || /#.*גג/i.test(href);
-}
-
-function injectDecisionBlockStyles() {
-  if (document.getElementById('solatrix-decision-block-master-style')) return;
-  const style = document.createElement('style');
-  style.id = 'solatrix-decision-block-master-style';
-  style.textContent = `
-    #decision .decision-grid-v2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:26px 0 22px}
-    #decision .decision-card-v2{background:#fff;border:1px solid var(--line);border-radius:26px;padding:24px 24px 22px;box-shadow:0 18px 46px rgba(42,33,24,.06)}
-    #decision .decision-card-v2 span{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:15px;background:#fff3df;color:#a76200;font-size:22px;font-weight:950;margin-bottom:14px}
-    #decision .decision-card-v2 h3{font-size:24px;line-height:1.12;margin:0 0 10px;color:#17120d;letter-spacing:-.018em}
-    #decision .decision-card-v2 p{font-size:18px;line-height:1.55;margin:0;color:#5f564c;font-weight:700}
-    #decision .decision-bottom-v2{display:grid;gap:16px;margin-top:20px}
-    #decision .decision-bottom-v2 .soft-note{font-size:19px;line-height:1.55}
-    #decision .decision-cta-v2{display:inline-flex;align-items:center;justify-content:center;width:max-content;max-width:100%;border-radius:999px;padding:15px 26px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#16100a;font-weight:950;text-decoration:none;box-shadow:0 16px 34px rgba(245,161,26,.22)}
-    @media(max-width:900px){#decision .decision-grid-v2{grid-template-columns:1fr}#decision .decision-card-v2{padding:22px}#decision .decision-cta-v2{width:100%}}
-  `;
-  document.head.appendChild(style);
-}
-
-function replaceDecisionBlock() {
-  if (!isHomePage()) return;
-  const section = document.getElementById('decision');
-  if (!section || section.dataset.solatrixDecisionMaster === 'true') return;
-  section.dataset.solatrixDecisionMaster = 'true';
-  injectDecisionBlockStyles();
-  section.innerHTML = `
-    <div class="container statement-grid">
-      <div class="sticky-title">
-        <div class="kicker dark">הסיבה האמיתית לגגות הריקים</div>
-        <h2>למה אנשים עדיין לא שמים מערכת סולארית, גם כשהמספרים נראים טוב?</h2>
-      </div>
-      <div class="statement-card">
-        <p>ברוב המקרים זה לא בגלל שהשמש לא מספיקה. זה בגלל שאין תשובות ברורות לשאלות שבאמת קובעות אם כדאי להתקדם.</p>
-        <div class="decision-grid-v2">
-          <div class="decision-card-v2"><span>01</span><h3>כמה הגג שלי באמת יכול לייצר?</h3><p>לא לפי ניחוש כללי — אלא לפי סימון גג, שטח, כיוון ומבנה.</p></div>
-          <div class="decision-card-v2"><span>02</span><h3>מה המחיר האמיתי של מערכת כזו?</h3><p>החישוב מחובר למחיר בסיס שקוף: ₪2,900 לקילוואט לפני מע״מ.</p></div>
-          <div class="decision-card-v2"><span>03</span><h3>תוך כמה זמן ההשקעה חוזרת?</h3><p>המערכת מחשבת חיסכון, מכירה לרשת, מע״מ והחזר השקעה.</p></div>
-          <div class="decision-card-v2"><span>04</span><h3>איך מקבלים דוח מסודר?</h3><p>בסוף הבדיקה נפתח דוח Master בן 3 עמודים עם בסיס החישוב.</p></div>
-        </div>
-        <div class="decision-bottom-v2">
-          <div class="soft-note">בדיוק בשביל זה בנינו את Solatrix Roof Check Master: קודם לראות את התמונה, אחר כך לקבל החלטה.</div>
-          <a class="decision-cta-v2" href="${calculatorUrl()}" data-solatrix-master-roof-check="true">בדקו את הגג שלכם</a>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function removeRedundantHomepageSections() {
-  if (!isHomePage()) return;
-  document.getElementById('decision')?.remove();
-  const normalize = (value = '') => value.replace(/\s+/g, ' ').trim();
-  const targets = ['הבעיה היא לא המערכת','כל גג נראה אחרת'];
-  targets.forEach((target) => {
-    const headings = [...document.querySelectorAll('h1, h2, h3, h4, h5')]
-      .filter((heading) => normalize(heading.textContent).includes(target));
-    headings.forEach((heading) => {
-      const section = heading.closest('section');
-      if (section) { section.remove(); return; }
-      let block = heading.parentElement;
-      while (block?.parentElement && block.parentElement !== document.body && block.parentElement.tagName !== 'MAIN') {
-        if (block.getBoundingClientRect().height >= 320 && block.parentElement.children.length > 1) break;
-        block = block.parentElement;
-      }
-      block?.remove();
-    });
+function connectLinks(){
+  if(isCalculatorPage())return;
+  const target=calculatorUrl();
+  document.querySelectorAll('a').forEach(link=>{
+    const label=link.textContent||'';
+    const href=link.getAttribute('href')||'';
+    if(matches(label,calculatorKeywords)||/roof-check(?:\.html|\/)?/i.test(href)||/#.*(?:roof|גג)/i.test(href))link.href=target;
+    else if(matches(label,contactKeywords)&&!/wa\.me|whatsapp/i.test(href))link.href='#lead-form';
   });
 }
 
-function connectRoofCheckLinks() {
-  if (isCalculatorPage()) return;
-  const target = calculatorUrl();
-  document.querySelectorAll('a').forEach((link) => {
-    const label = link.textContent || '';
-    const href = link.getAttribute('href') || '';
-    if (textMatches(label) || hrefMatchesCalculator(href)) {
-      link.setAttribute('href', target);
-      link.setAttribute('data-solatrix-linked-calculator', CALCULATOR_MASTER_VERSION);
-    } else if (textMatches(label, contactKeywords) && !/wa\.me|whatsapp/i.test(href)) {
-      link.setAttribute('href', '#lead-form');
-      link.setAttribute('data-solatrix-open-lead-form', 'true');
-    }
-  });
-  document.querySelectorAll('button, [role="button"]').forEach((button) => {
-    const label = button.textContent || '';
-    if (textMatches(label)) {
-      button.setAttribute('data-solatrix-linked-calculator', CALCULATOR_MASTER_VERSION);
-      button.addEventListener('click', (event) => {
-        event.preventDefault();
-        window.location.href = target;
-      });
-    } else if (textMatches(label, contactKeywords)) {
-      button.setAttribute('data-solatrix-open-lead-form', 'true');
-    }
-  });
+function findRoofTarget(){
+  const trigger=[...document.querySelectorAll('a,button')].find(el=>/ראו\s*את\s*הגג\s*שלכם/.test((el.textContent||'').replace(/\s+/g,' ')));
+  const scope=trigger?.closest('section')||document;
+  const direct=scope.querySelector('.roof-selected,.roof-map-image-placeholder,.selected-visual,.demo-map');
+  if(direct)return direct;
+  return [...scope.querySelectorAll('div,figure')].filter(el=>{
+    const r=el.getBoundingClientRect();
+    const text=(el.textContent||'').replace(/\s+/g,' ').trim();
+    return r.width>260&&r.height>220&&text.length<40;
+  }).sort((a,b)=>{const ar=a.getBoundingClientRect(),br=b.getBoundingClientRect();return br.width*br.height-ar.width*ar.height})[0]||null;
 }
 
-function mountHeroRoofPhoto() {
-  if (!isHomePage()) return;
-  const map = document.querySelector('.hero-preview-map');
-  if (!map || map.querySelector('.hero-real-photo')) return;
-  const photo = document.createElement('img');
-  photo.className = 'hero-real-photo';
-  photo.alt = 'בית עם מערכת סולארית על הגג';
-  photo.decoding = 'async';
-  photo.loading = 'eager';
-  photo.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;z-index:0;filter:saturate(.9) contrast(1.04) brightness(.78);';
-  const sources = [
-    'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-approved-hero-image.jpg',
-    'https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/assets/solatrix-hero-real-home-v33.jpg',
-    'https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=1600&q=85'
-  ];
-  let sourceIndex = 0;
-  photo.onerror = () => { sourceIndex += 1; if (sourceIndex < sources.length) photo.src = sources[sourceIndex]; };
-  photo.src = sources[sourceIndex];
-  map.prepend(photo);
+function mountRoofAnimation(){
+  if(!isPrivateHomesPage()||document.querySelector('.igor-approved-before-after'))return;
+  const target=findRoofTarget();
+  if(!target)return;
+  target.classList.add('igor-approved-before-after');
+  target.innerHTML=`<img src="${BEFORE}" alt="הגג לפני התקנת מערכת סולארית"><div class="igor-after-wrap"><img class="igor-after" src="${AFTER}" alt="הגג אחרי התקנת מערכת סולארית"></div><div class="igor-divider"><span>↔</span></div><span class="igor-label igor-label-before">לפני</span><span class="igor-label igor-label-after">אחרי</span>`;
 }
 
-function restorePrivateHomesRoofPreview() {
-  if (!isPrivateHomesPage()) return;
-  const candidates = [...document.querySelectorAll('#roof-check .roof-selected, #roof-check .selected-visual, .roof-selected, .roof-map-image-placeholder')];
-  const trigger = [...document.querySelectorAll('a,button')].find((node) => /ראו\s*את\s*הגג\s*שלכם/.test((node.textContent || '').replace(/\s+/g, ' ')));
-  const section = trigger?.closest('section');
-  if (section) section.querySelectorAll('.selected-visual, figure, .demo-map, [class*="roof"][class*="visual"]').forEach((node) => candidates.push(node));
-  const target = candidates.find((node) => node && node.getBoundingClientRect().height > 140) || candidates[0];
-  if (!target || target.dataset.solatrixRoofPreviewRestored === 'pair') return;
-  target.dataset.solatrixRoofPreviewRestored = 'pair';
-  target.innerHTML = `
-    <div class="igor-roof-pair" aria-label="השוואת גג לפני ואחרי התקנת מערכת סולארית">
-      <figure><img src="${IGOR_BEFORE}" alt="הגג לפני התקנת פאנלים סולאריים"><figcaption>לפני</figcaption></figure>
-      <figure><img src="${IGOR_AFTER}" alt="הגג אחרי התקנת פאנלים סולאריים"><figcaption>אחרי</figcaption></figure>
-    </div>`;
-  target.style.position = 'relative';
-  target.style.overflow = 'hidden';
-  target.style.background = '#fffaf2';
-}
-
-function removePersistentContactDock() {
-  document.querySelectorAll('.mobile-bottom-cta,.mobileBottomCta,[class*="mobile-bottom-cta"]').forEach((element) => element.remove());
-}
-
-function initSolatrixSiteLinks() {
-  injectGlobalCleanupStyles();
-  removePersistentContactDock();
-  removeRedundantHomepageSections();
-  connectRoofCheckLinks();
-  mountHeroRoofPhoto();
-  restorePrivateHomesRoofPreview();
-}
-
-let maintenanceQueued = false;
-const maintenanceObserver = new MutationObserver(() => {
-  if (maintenanceQueued) return;
-  maintenanceQueued = true;
-  window.requestAnimationFrame(() => {
-    maintenanceQueued = false;
-    injectGlobalCleanupStyles();
-    removePersistentContactDock();
-    connectRoofCheckLinks();
-    restorePrivateHomesRoofPreview();
-  });
-});
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    initSolatrixSiteLinks();
-    maintenanceObserver.observe(document.body, { childList: true, subtree: true });
-  });
-} else {
-  initSolatrixSiteLinks();
-  maintenanceObserver.observe(document.body, { childList: true, subtree: true });
-}
+function removeDock(){document.querySelectorAll('.mobile-bottom-cta,.mobileBottomCta,[class*="mobile-bottom-cta"]').forEach(el=>el.remove())}
+function init(){injectStyles();normalizeOfficialUrl();removeDock();connectLinks();mountRoofAnimation();setTimeout(mountRoofAnimation,500);setTimeout(mountRoofAnimation,1400)}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
