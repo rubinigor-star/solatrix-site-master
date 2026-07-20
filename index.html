@@ -15,10 +15,10 @@
   <script>
     (async()=>{
       try{
-        const response=await fetch('./private-homes.html?homepage=official-v3',{cache:'no-store'});
+        const response=await fetch('./private-homes.html?homepage=official-v4',{cache:'no-store'});
         if(!response.ok) throw new Error('Homepage source failed');
         let html=await response.text();
-        const patch='<script type="module" src="./src/approvedHomepagePatch.js?v=11c588f5"><\/script>';
+        const patch='<script src="https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/src/approvedHomepagePatch.js?v=316d2c55"><\/script>';
         html=html.replace('</body>',patch+'</body>');
         document.open();
         document.write(html);
