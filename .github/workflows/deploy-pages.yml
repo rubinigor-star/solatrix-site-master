@@ -40,10 +40,35 @@ jobs:
       - name: Build production
         run: npm run build
 
+      - name: Add accessibility controls
+        run: |
+          cp src/accessibilityWidget.js dist/accessibilityWidget.js
+          python3 - <<'PY'
+          from pathlib import Path
+
+          script = '<script src="/solatrix-site-master/accessibilityWidget.js"></script>'
+          for page in Path('dist').rglob('*.html'):
+              html = page.read_text(encoding='utf-8')
+              if 'accessibilityWidget.js' in html:
+                  continue
+              if '</body>' in html:
+                  html = html.replace('</body>', f'{script}\n</body>', 1)
+              else:
+                  html += f'\n{script}\n'
+              page.write_text(html, encoding='utf-8')
+          PY
+
       - name: Verify production artifact
         run: |
           test -f dist/index.html
           grep -q "hero-preview-card" dist/index.html
+          grep -q "accessibilityWidget.js" dist/index.html
+          test -f dist/accessibilityWidget.js
+          test -d dist/roof-check
+          grep -R -q "הספק המערכת" dist/assets dist/roof-check || {
+            echo 'The approved PDF template was not found in the production build.'
+            exit 1
+          }
           if grep -R -n -F '<div aria-label="פעולות מהירות" class="mobile-bottom-cta">' dist; then
             echo 'Persistent mobile contact dock is still present in the production artifact.'
             exit 1
