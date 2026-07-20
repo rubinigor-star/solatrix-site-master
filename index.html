@@ -5,28 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Solatrix Energy</title>
   <meta name="description" content="Solatrix Energy — פתרונות אנרגיה סולארית ובדיקת פוטנציאל גג." />
+  <meta http-equiv="refresh" content="0; url=./private-homes.html?official=1" />
   <style>
     html,body{margin:0;min-height:100%;background:#fffaf1;font-family:Arial,sans-serif}
-    .solatrix-loading{min-height:100vh;display:grid;place-items:center;color:#071b2f;font-weight:800}
+    main{min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px;color:#071b2f}
+    a{text-decoration:none;color:#071b2f;font-weight:800}
   </style>
+  <script>location.replace('./private-homes.html?official=1');</script>
 </head>
 <body>
-  <div class="solatrix-loading">האתר נטען...</div>
-  <script>
-    (async()=>{
-      try{
-        const response=await fetch('./private-homes.html?homepage=official-v4',{cache:'no-store'});
-        if(!response.ok) throw new Error('Homepage source failed');
-        let html=await response.text();
-        const patch='<script src="https://raw.githubusercontent.com/rubinigor-star/solatrix-site-master/main/src/approvedHomepagePatch.js?v=316d2c55"><\/script>';
-        html=html.replace('</body>',patch+'</body>');
-        document.open();
-        document.write(html);
-        document.close();
-      }catch(error){
-        document.body.innerHTML='<main style="min-height:100vh;display:grid;place-items:center;text-align:center;padding:24px;color:#071b2f"><div><h1>Solatrix Energy</h1><p>לא הצלחנו לטעון את האתר.</p><a href="./private-homes.html">כניסה לאתר</a></div></main>';
-      }
-    })();
-  </script>
+  <main><a href="./private-homes.html?official=1">Solatrix Energy</a></main>
 </body>
 </html>
