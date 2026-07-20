@@ -40,21 +40,48 @@ jobs:
       - name: Build production
         run: npm run build
 
-      - name: Add accessibility controls
+      - name: Add accessibility controls and remove link underlines
         run: |
           cp src/accessibilityWidget.js dist/accessibilityWidget.js
           python3 - <<'PY'
           from pathlib import Path
 
-          script = '<script src="/solatrix-site-master/accessibilityWidget.js"></script>'
+          version = '4b9ff1a1'
+          script = f'<script src="/solatrix-site-master/accessibilityWidget.js?v={version}"></script>'
+          style = '''<style id="solatrix-no-link-underlines">
+          a,
+          a:link,
+          a:visited,
+          a:hover,
+          a:active,
+          a:focus,
+          nav a,
+          header a,
+          [role="button"],
+          .btn,
+          .button,
+          .cta,
+          .nav-link {
+            text-decoration: none !important;
+            text-decoration-line: none !important;
+          }
+          </style>'''
+
           for page in Path('dist').rglob('*.html'):
               html = page.read_text(encoding='utf-8')
-              if 'accessibilityWidget.js' in html:
-                  continue
-              if '</body>' in html:
-                  html = html.replace('</body>', f'{script}\n</body>', 1)
+              if 'solatrix-no-link-underlines' not in html:
+                  if '</head>' in html:
+                      html = html.replace('</head>', f'{style}\n</head>', 1)
+                  else:
+                      html = style + '\n' + html
+              if 'accessibilityWidget.js' not in html:
+                  if '</body>' in html:
+                      html = html.replace('</body>', f'{script}\n</body>', 1)
+                  else:
+                      html += f'\n{script}\n'
               else:
-                  html += f'\n{script}\n'
+                  import re
+                  html = re.sub(r'<script[^>]+accessibilityWidget\.js[^>]*></script>', script, html)
               page.write_text(html, encoding='utf-8')
           PY
 
@@ -63,6 +90,7 @@ jobs:
           test -f dist/index.html
           grep -q "hero-preview-card" dist/index.html
           grep -q "accessibilityWidget.js" dist/index.html
+          grep -q "solatrix-no-link-underlines" dist/index.html
           test -f dist/accessibilityWidget.js
           test -d dist/roof-check
           grep -R -q "הספק המערכת" dist/assets dist/roof-check || {
