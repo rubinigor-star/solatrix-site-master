@@ -1,4 +1,15 @@
+import { jsPDF } from 'jspdf';
 import { createRoofCheckPdfV3 } from './reportPdfClientV3.js';
+
+if (typeof jsPDF.API.arc !== 'function') {
+  jsPDF.API.arc = function(x, y, rx, ry) {
+    this.line(x-rx, y, x-rx*.55, y+ry*.45);
+    this.line(x-rx*.55, y+ry*.45, x, y+ry*.62);
+    this.line(x, y+ry*.62, x+rx*.55, y+ry*.45);
+    this.line(x+rx*.55, y+ry*.45, x+rx, y);
+    return this;
+  };
+}
 
 const viewer=document.querySelector('#viewer');
 const download=document.querySelector('#download');
