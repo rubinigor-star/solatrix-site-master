@@ -1,0 +1,2 @@
+Redeploy restored Roof Check PDF preview from commit 3ca8a836437f8836d48fe4b44067f59cc73bbdce.
+No application or PDF template changes.
