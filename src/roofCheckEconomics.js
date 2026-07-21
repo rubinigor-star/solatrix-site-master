@@ -88,7 +88,13 @@ export function calculateRoofCheckEconomics(input = {}, overrides = {}) {
   };
 }
 
-export const calculateResidentialEconomics = calculateRoofCheckEconomics;
+export function calculateResidentialEconomics(input = {}, overrides = {}) {
+  return calculateRoofCheckEconomics({ ...input, isCommercial: false }, overrides);
+}
+
+export function calculateCommercialEconomics(input = {}, overrides = {}) {
+  return calculateRoofCheckEconomics({ ...input, isCommercial: true }, overrides);
+}
 
 export function validateRoofCheckEconomics(result) {
   const issues = [];
@@ -114,6 +120,7 @@ export function validateRoofCheckEconomics(result) {
 }
 
 export const validateResidentialEconomics = validateRoofCheckEconomics;
+export const validateEconomics = validateRoofCheckEconomics;
 
 function positiveNumber(value) {
   const number = Number(value);
