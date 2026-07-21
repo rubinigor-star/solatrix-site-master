@@ -1,5 +1,4 @@
 import { jsPDF } from 'jspdf';
-import { createRoofCheckPdfV3 } from './reportPdfClientV3.js';
 
 if (typeof jsPDF.API.arc !== 'function') {
   jsPDF.API.arc = function(x, y, rx, ry) {
@@ -29,6 +28,7 @@ function ready(value){download.style.pointerEvents=value?'auto':'none';download.
 async function render(){
   status.textContent='מייצר גרסה 3…';refresh.disabled=true;ready(false);viewer.removeAttribute('src');
   try{
+    const { createRoofCheckPdfV3 } = await import('./reportPdfClientV3.js?v=20260721-1515');
     const blob=await createRoofCheckPdfV3(sample);
     if(!(blob instanceof Blob)||blob.size<1000)throw new Error('Generated PDF is empty.');
     if(objectUrl)URL.revokeObjectURL(objectUrl);
