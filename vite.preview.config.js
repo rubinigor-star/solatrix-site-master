@@ -10,7 +10,8 @@ export default {
       ...(baseConfig.build?.rollupOptions || {}),
       input: {
         ...existingInput,
-        pdfPreview: 'pdf-preview.html'
+        pdfPreview: 'pdf-preview.html',
+        pdfPreviewV3: 'pdf-preview-v3.html'
       }
     }
   }
