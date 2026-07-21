@@ -93,7 +93,7 @@ jobs:
           grep -q "solatrix-no-link-underlines" dist/index.html
           test -f dist/accessibilityWidget.js
           test -d dist/roof-check
-          grep -R -q "הספק המערכת" dist/assets dist/roof-check || {
+          grep -R -q "הספק מערכת" dist/assets dist/roof-check || {
             echo 'The approved PDF template was not found in the production build.'
             exit 1
           }
