@@ -1,24 +1,22 @@
 import { jsPDF } from 'jspdf';
 import coverHeroUrl from './assets/roof-check-report/roof-check-cover-hero.webp';
 import installersUrl from './assets/roof-check-report/roof-check-installers.webp';
-import familyUrl from './assets/roof-check-report/roof-check-family.webp';
 import { calculateCommercialEconomics, calculateResidentialEconomics } from './roofCheckEconomics.js';
 
 const LOGO_URL='https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_596,h_388,al_c,q_100/Solatrix%20Logo%20Sait%20Main.png';
 const FONT_URL='https://raw.githubusercontent.com/google/fonts/main/ofl/heebo/Heebo%5Bwght%5D.ttf';
-const C={paper:[250,249,246],navy:[7,31,50],navy2:[12,43,66],orange:[247,163,24],ink:[23,37,48],muted:[88,99,108],line:[222,219,211],white:[255,255,255],blue:[26,94,138],green:[35,163,93],grid:[228,231,233]};
+const C={paper:[250,249,246],navy:[6,31,50],navy2:[10,42,65],orange:[247,163,24],ink:[22,36,48],muted:[88,99,108],line:[220,218,211],white:[255,255,255],blue:[24,91,136],green:[35,163,93],grid:[228,231,233]};
 
 export async function createRoofCheckPdfV3({customer={},reportData={}}={}){
   const roof=reportData.roofData||{};
   const values=buildValues(reportData.calculationModel||{},roof);
-  const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true,putOnlyUsedFonts:true});
+  const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true,putOnlyUsedFonts:true});
   await installFonts(pdf);
-  const [logo,hero,installers,family]=await Promise.all([loadImage(LOGO_URL,1200),loadImage(coverHeroUrl,2800),loadImage(installersUrl,2400),loadImage(familyUrl,2800)]);
-  pageOne(pdf,{customer,roof,values,logo,hero});
+  const [logo,hero,installers]=await Promise.all([loadImage(LOGO_URL,1200),loadImage(coverHeroUrl,2800),loadImage(installersUrl,2400)]);
+  const generatedAt=new Date().toLocaleString('he-IL',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  pageOne(pdf,{customer,roof,values,logo,hero,generatedAt});
   pdf.addPage(); pageTwo(pdf,{customer,values,logo,installers});
-  pdf.addPage(); pageThree(pdf,{values,logo});
-  pdf.addPage(); pageFour(pdf,{family,logo});
-  pdf.setProperties({title:'Solatrix Roof Check V3',subject:'Premium solar feasibility report',author:'Solatrix Energy'});
+  pdf.setProperties({title:'Solatrix Roof Check V3 Executive',subject:'Two-page premium solar feasibility report',author:'Solatrix Energy'});
   return pdf.output('blob');
 }
 
@@ -33,67 +31,71 @@ function buildValues(model,roof){
 }
 
 function pageOne(pdf,c){
-  background(pdf); header(pdf,c.logo,'בדיקת כדאיות סולארית');
-  imageCover(pdf,c.hero,15,34,180,72,7);
-  pill(pdf,15,111,180,11,c.values.isCommercial?'מערכת מסחרית':'מערכת ביתית');
+  background(pdf);
+  imageCover(pdf,c.hero,6,6,285,106,6);
+  pdf.setFillColor(255,255,255);pdf.roundedRect(6,6,55,28,0,0,8,8,'F');
+  if(c.logo)contain(pdf,c.logo,12,8,38,22);
+  ltr(pdf,'ROOF CHECK BY SOLATRIX',282,16,2.6,'bold',C.orange,'right');
+  rtl(pdf,'הגיע הזמן לחסוך',282,29,9.2,'bold',C.white);
+  rtl(pdf,'בחשמל',282,42,11,'bold',C.orange);
+  rtl(pdf,'דוח מקצועי ואמין לבדיקת כדאיות',282,52,3.6,'normal',C.white);
+  rtl(pdf,'להתקנת מערכת סולארית.',282,58,3.6,'normal',C.white);
+  darkBadge(pdf,13,83,68,22,'בדיקת התאמה ראשונית','וללא התחייבות');
+  round(pdf,6,116,285,14,C.orange,C.orange,5);
+  rtlCenter(pdf,c.values.isCommercial?'בדיקת כדאיות למערכת מסחרית':'בדיקת כדאיות למערכת ביתית',148.5,125.2,5.5,'bold',C.navy);
   const cards=[
-    ['הספק מערכת',one(c.values.systemSizeKwp),'kWp'],
-    ['ייצור שנתי',num(c.values.annualProduction),'kWh'],
-    ['עלות לפני מע״מ',money(c.values.costBeforeVat),''],
-    ['החזר השקעה )שנים(',one(c.values.paybackWithVat),'']
+    ['הספק מערכת משוער',one(c.values.systemSizeKwp),'kWp','bolt'],
+    ['ייצור שנתי צפוי',num(c.values.annualProduction),'kWh','panel'],
+    ['עלות משוערת לפני מע״מ',money(c.values.costBeforeVat),'','wallet'],
+    ['תקופת החזר משוערת',one(c.values.paybackWithVat),'שנים','clock']
   ];
-  cards.forEach((it,i)=>metricCard(pdf,15+i*45,128,41,31,it[0],it[1],it[2]));
-  darkPanel(pdf,15,166,180,34,'האם הגג מתאים למערכת סולארית?','כן. לפי השטח שסומן, ניתן להקים מערכת יעילה עם פוטנציאל כלכלי משמעותי לאורך 25 שנה.');
-  infoCard(pdf,15,207,87,28,'כתובת הנכס',c.roof.address||'—');
-  infoCard(pdf,108,207,87,28,'שם הלקוח',c.customer.name||'—');
-  infoCard(pdf,15,241,87,25,'שטח גג שסומן',`${num(c.values.roofArea)} מ״ר`);
-  infoCard(pdf,108,241,87,25,'מספר פאנלים משוער',num(c.values.panels));
+  cards.forEach((it,i)=>kpiCard(pdf,6+i*72.75,135,67,35,...it));
+  round(pdf,6,175,285,31,C.navy,C.navy,6);
+  icon(pdf,'question',20,190,C.white,8);
+  rtl(pdf,'מה בדקנו?',280,187,5.6,'bold',C.white);
+  rtl(pdf,'הדוח מתרגם את שטח הגג שסומן להספק מערכת משוער, ייצור חשמל שנתי, ערך כספי, עלות הקמה ותחזית ל־25 שנה.',280,199,3.5,'normal',[229,236,241],235);
+  const facts=[
+    ['כתובת הנכס',c.roof.address||'—','pin'],
+    ['שם הלקוח',c.customer.name||'—','user'],
+    ['תאריך הפקה',c.generatedAt,'calendar'],
+    ['שטח גג שסומן',`${num(c.values.roofArea)} מ״ר`,'grid']
+  ];
+  facts.forEach((it,i)=>factStrip(pdf,6+i*72.75,211,67,24,...it));
   footer(pdf,1);
 }
 
 function pageTwo(pdf,c){
-  background(pdf); header(pdf,c.logo,'פירוט החישוב');
-  darkMetric(pdf,15,38,60,64,'ייצור שנתי',num(c.values.annualProduction),'kWh');
-  imageCover(pdf,c.installers,81,38,114,64,7);
-  sectionTitle(pdf,'נתוני הפרויקט',195,116);
+  background(pdf);
+  rtl(pdf,'כך בנוי החישוב',290,16,7.2,'bold',C.navy);
+  pdf.setDrawColor(...C.orange);pdf.setLineWidth(.6);pdf.line(154,20,291,20);
+  darkMetric(pdf,6,27,66,60,'ייצור שנתי',num(c.values.annualProduction),'kWh',`${one(c.values.systemSizeKwp)} kWp × 1,650`);
+  imageCover(pdf,c.installers,79,27,212,60,6);
+  sectionTitle(pdf,'פירוט הפרויקט',151,98);
   const rows=[
     ['שטח גג מסומן',`${num(c.values.roofArea)} מ״ר`],
     ['שטח גג שמיש',`${num(c.values.usableArea)} מ״ר`],
-    ['מספר פאנלים',num(c.values.panels)],
+    ['מספר פאנלים משוער',num(c.values.panels)],
     ['הספק מערכת',`${one(c.values.systemSizeKwp)} kWp`],
     ['ייצור שנתי',`${num(c.values.annualProduction)} kWh`],
     ['עלות לפני מע״מ',money(c.values.costBeforeVat)],
     ['עלות כולל מע״מ',money(c.values.costWithVat)],
-    ['החזר השקעה )שנים(',one(c.values.paybackWithVat)]
+    ['החזר השקעה (שנים)',one(c.values.paybackWithVat)],
+    ['סוג מערכת',c.values.isCommercial?'מסחרית':'ביתית']
   ];
-  rows.forEach((r,i)=>tableRow(pdf,15,124+i*15,115,12,r[0],r[1]));
-  smallCard(pdf,137,124,58,27,'סוג מערכת',c.values.isCommercial?'מסחרית':'ביתית');
-  smallCard(pdf,137,157,58,27,'חשבון חודשי',money(c.values.monthlyBill));
-  smallCard(pdf,137,190,58,27,'טלפון',c.customer.phone||'—');
-  smallCard(pdf,137,223,58,27,'מודל','נבדק');
-  noteCard(pdf,15,253,180,22,'איך חישבנו?',c.values.isCommercial?'כל הייצור מחושב לפי תעריף מסחרי של 0.39 ₪ לקוט״ש.':'35% מהייצור מחושב כחיסכון עצמי לפי 0.64 ₪ לקוט״ש ו־65% כמכירה לרשת לפי 0.48 ₪ לקוט״ש.');
-  footer(pdf,2);
-}
-
-function pageThree(pdf,c){
-  background(pdf); header(pdf,c.logo,'תחזית ייצור וביצועים פיננסיים');
+  rows.forEach((r,i)=>tableRow(pdf,6,104+i*8.8,151,7.6,r[0],r[1]));
+  sideCard(pdf,164,104,61,24,'חשבון חודשי משוער',money(c.values.monthlyBill||0),'bill');
+  sideCard(pdf,230,104,61,24,'WhatsApp',c.customer.phone||'—','whatsapp');
+  sideCard(pdf,164,133,61,24,'תקינות חישוב','נבדק','check');
+  sideCard(pdf,230,133,61,24,'מודל תעריף',c.values.isCommercial?'מסחרי':'ביתי','tag');
+  noteCard(pdf,164,162,127,21,'הערה','המחיר הוא אומדן ראשוני להתקנה סטנדרטית וללא עבודות חריגות.');
+  noteCard(pdf,164,187,127,21,'מודל פיננסי',c.values.isCommercial?'כל הייצור מחושב לפי ערך של 0.39 ₪ לקוט״ש.':'35% מהייצור מחושב כחיסכון עצמי לפי 0.64 ₪ לקוט״ש, ו־65% כמכירה לרשת לפי 0.48 ₪ לקוט״ש.');
   const p=projection(c.values);
-  const cards=[['השקעה כוללת',money(c.values.costWithVat)],['שנה ראשונה',money(c.values.annualSavings)],['החזר השקעה )שנים(',one(c.values.paybackWithVat)],['רווח נקי ל־25 שנה',money(p.netProfit25)]];
-  cards.forEach((it,i)=>metricCard(pdf,15+i*45,39,41,29,it[0],it[1],''));
-  chartShell(pdf,15,76,180,73,'ייצור חשמל חודשי צפוי'); monthlyChart(pdf,24,100,162,37,p.months);
-  chartShell(pdf,15,157,180,68,'תזרים מצטבר והחזר השקעה'); cashflowChart(pdf,24,181,162,31,p.cashflow,c.values.paybackWithVat);
-  summaryBand(pdf,15,233,180,39,p,c.values);
-  footer(pdf,3);
-}
-
-function pageFour(pdf,c){
-  background(pdf); header(pdf,c.logo,'איך מתקדמים מכאן?');
-  const steps=[['1','שיחת היכרות','עוברים יחד על הדוח ועל מטרות הפרויקט.'],['2','בדיקת מסמכים','בודקים חשבון חשמל, חיבור קיים ובעלות.'],['3','בדיקת שטח','מוודאים הצללות, חשמל וקונסטרוקציה.'],['4','הצעה מלאה','מקבלים תכנון, ציוד, מחיר ולוחות זמנים.']];
-  steps.forEach((s,i)=>stepCard(pdf,15+i*45,44,41,83,...s));
-  imageCover(pdf,c.family,15,138,180,67,7);
-  darkPanel(pdf,15,213,180,31,'דוח מקצועי ומוכן לשיתוף','הקובץ כולל את כל הנתונים, ההנחות והתחזית הפיננסית ומוכן לשליחה ללקוח.');
-  brandBand(pdf,15,252,180,24);
-  footer(pdf,4);
+  chartCard(pdf,6,187,72,51,'ייצור חשמל חודשי (kWh)');
+  monthlyChart(pdf,11,202,62,28,p.months);
+  chartCard(pdf,84,187,72,51,'תזרים מצטבר והחזר השקעה');
+  cashflowChart(pdf,90,202,60,28,p.cashflow,c.values.paybackWithVat);
+  summaryBand(pdf,164,214,127,24,p,c.values);
+  footer(pdf,2);
 }
 
 function projection(v){
@@ -107,29 +109,26 @@ function projection(v){
   return{months,cashflow,totalIncome25,netProfit25:totalIncome25-v.costWithVat,roi25:v.costWithVat?((totalIncome25-v.costWithVat)/v.costWithVat)*100:0};
 }
 
-function background(pdf){pdf.setFillColor(...C.paper);pdf.rect(0,0,210,297,'F');}
-function header(pdf,logo,title){if(logo)contain(pdf,logo,158,8,37,18);rtl(pdf,title,195,26,9.5,'bold',C.navy);pdf.setDrawColor(...C.orange);pdf.setLineWidth(.6);pdf.line(15,31,195,31);}
-function footer(pdf,page){pdf.setDrawColor(...C.line);pdf.line(15,282,195,282);ltr(pdf,`${page} / 4`,15,290,3.1,'normal',C.muted,'left');ltr(pdf,'Solatrix Energy • Roof Check V3',195,290,3.1,'normal',C.muted,'right');}
-function sectionTitle(pdf,text,x,y){rtl(pdf,text,x,y,5.8,'bold',C.navy);}
-function pill(pdf,x,y,w,h,text){round(pdf,x,y,w,h,C.orange,C.orange,5);rtlCenter(pdf,text,x+w/2,y+7.3,4.2,'bold',C.navy);}
-function metricCard(pdf,x,y,w,h,label,value,unit){card(pdf,x,y,w,h,6);rtlCenter(pdf,label,x+w/2,y+8,3.2,'bold',C.muted);ltr(pdf,value,x+w/2,y+20,5.8,'bold',C.navy,'center');if(unit)ltr(pdf,unit,x+w/2,y+27,2.9,'normal',C.muted,'center');}
-function darkPanel(pdf,x,y,w,h,title,text){round(pdf,x,y,w,h,C.navy,C.navy,7);rtl(pdf,title,x+w-8,y+12,5.6,'bold',C.orange);rtl(pdf,text,x+w-8,y+23,3.8,'normal',[232,238,242],w-16);}
-function infoCard(pdf,x,y,w,h,label,value){card(pdf,x,y,w,h,6);rtl(pdf,label,x+w-7,y+9,3.2,'bold',C.muted);hasHebrew(value)?rtl(pdf,value,x+w-7,y+19,4.2,'bold',C.navy,w-14):ltr(pdf,value,x+w-7,y+19,4.2,'bold',C.navy,'right');}
-function darkMetric(pdf,x,y,w,h,label,value,unit){round(pdf,x,y,w,h,C.navy,C.navy,7);rtlCenter(pdf,label,x+w/2,y+19,4.5,'bold',C.white);ltr(pdf,value,x+w/2,y+38,8,'bold',C.white,'center');ltr(pdf,unit,x+w/2,y+49,3.2,'normal',[224,233,239],'center');}
-function tableRow(pdf,x,y,w,h,label,value){card(pdf,x,y,w,h,3);rtl(pdf,label,x+w-6,y+7.7,3.25,'bold',C.muted);hasHebrew(value)?rtl(pdf,value,x+38,y+7.7,3.8,'bold',C.navy):ltr(pdf,value,x+6,y+7.7,3.8,'bold',C.navy,'left');}
-function smallCard(pdf,x,y,w,h,label,value){card(pdf,x,y,w,h,5);rtl(pdf,label,x+w-6,y+9,3.1,'bold',C.muted);hasHebrew(value)?rtl(pdf,value,x+w-6,y+19,4.2,'bold',C.navy):ltr(pdf,value,x+w-6,y+19,4.2,'bold',C.navy,'right');}
-function noteCard(pdf,x,y,w,h,title,text){card(pdf,x,y,w,h,5);rtl(pdf,title,x+w-7,y+8,3.5,'bold',C.navy);rtl(pdf,text,x+w-7,y+16,3.1,'normal',C.muted,w-14);}
-function chartShell(pdf,x,y,w,h,title){card(pdf,x,y,w,h,6);rtl(pdf,title,x+w-8,y+12,5,'bold',C.navy);}
-function monthlyChart(pdf,x,y,w,h,months){const max=Math.max(...months.map(m=>m.kwh),1),bw=8.2,g=5.3,base=y+h;pdf.setDrawColor(...C.grid);for(let i=0;i<4;i++)pdf.line(x,y+i*h/3,x+w,y+i*h/3);months.forEach((m,i)=>{const bx=x+i*(bw+g)+2,bh=(m.kwh/max)*(h-9);pdf.setFillColor(...C.orange);pdf.roundedRect(bx,base-bh,bw,bh,1.5,1.5,'F');rtlCenter(pdf,m.label,bx+bw/2,base+5,2.4,'bold',C.muted);ltr(pdf,num(m.kwh),bx+bw/2,base-bh-2,2.1,'bold',C.navy,'center');});}
-function cashflowChart(pdf,x,y,w,h,points,payback){const vals=points.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,1),px=yr=>x+(yr/25)*w,py=v=>y+h-((v-min)/range)*h;pdf.setDrawColor(...C.grid);pdf.line(x,py(0),x+w,py(0));[0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+5,2.4,'normal',C.muted,'center');});pdf.setDrawColor(...C.blue);pdf.setLineWidth(1.1);for(let i=1;i<points.length;i++)pdf.line(px(points[i-1].year),py(points[i-1].value),px(points[i].year),py(points[i].value));pdf.setFillColor(...C.orange);pdf.circle(px(Math.min(payback,25)),py(0),2.1,'F');}
-function summaryBand(pdf,x,y,w,h,p,v){round(pdf,x,y,w,h,C.navy,C.navy,6);rtlCenter(pdf,'סיכום פיננסי ל־25 שנה',x+w/2,y+9,4.2,'bold',C.orange);const items=[['הכנסה מצטברת',money(p.totalIncome25)],['השקעה',money(v.costWithVat)],['רווח נקי',money(p.netProfit25)],['ROI',`${Math.round(p.roi25)}%`]];const col=w/4;items.forEach((it,i)=>{const cx=x+col*i+col/2;if(i>0){pdf.setDrawColor(60,82,100);pdf.line(x+col*i,y+13,x+col*i,y+h-5);}ltr(pdf,it[1],cx,y+23,4.4,'bold',C.white,'center');pdf.setDrawColor(...C.orange);pdf.setLineWidth(.5);pdf.line(cx-13,y+25,cx+13,y+25);if(it[0]==='ROI')ltr(pdf,it[0],cx,y+33,2.8,'bold',[227,234,239],'center');else rtlCenter(pdf,it[0],cx,y+33,2.8,'bold',[227,234,239]);});}
-function stepCard(pdf,x,y,w,h,n,title,text){card(pdf,x,y,w,h,7);pdf.setFillColor(...C.navy);pdf.circle(x+w/2,y+13,7,'F');ltr(pdf,n,x+w/2,y+15,5.2,'bold',C.white,'center');rtlCenter(pdf,title,x+w/2,y+34,4.5,'bold',C.navy);rtlCenter(pdf,text,x+w/2,y+47,3.1,'normal',C.muted,w-10);}
-function brandBand(pdf,x,y,w,h){round(pdf,x,y,w,h,C.navy,C.navy,6);ltr(pdf,'Solatrix Energy',x+w-8,y+10,4.6,'bold',C.orange,'right');ltr(pdf,'solatrix.energy',x+8,y+16,3.7,'bold',C.orange,'left');}
+function darkBadge(pdf,x,y,w,h,title,text){round(pdf,x,y,w,h,C.navy,C.orange,5);icon(pdf,'check',x+9,y+h/2,C.orange,5);rtl(pdf,title,x+w-7,y+8,3.5,'bold',C.white);rtl(pdf,text,x+w-7,y+15,3.2,'bold',C.white);}
+function kpiCard(pdf,x,y,w,h,label,value,unit,ic){card(pdf,x,y,w,h,5);icon(pdf,ic,x+9,y+h/2,C.orange,5.5);rtl(pdf,label,x+w-6,y+8,2.9,'bold',C.muted);ltr(pdf,value,x+w/2+4,y+21,6.1,'bold',C.navy,'center');if(unit){hasHebrew(unit)?rtlCenter(pdf,unit,x+w/2+4,y+29,2.7,'bold',C.navy):ltr(pdf,unit,x+w/2+4,y+29,2.7,'bold',C.navy,'center');}}
+function factStrip(pdf,x,y,w,h,label,value,ic){icon(pdf,ic,x+8,y+12,C.navy,4.3);pdf.setDrawColor(...C.line);if(x>6)pdf.line(x,y+3,x,y+h-3);rtl(pdf,label,x+w-5,y+8,2.7,'normal',C.muted);hasHebrew(value)?rtl(pdf,value,x+w-5,y+17,3.4,'bold',C.navy,w-18):ltr(pdf,value,x+w-5,y+17,3.4,'bold',C.navy,'right');}
+function darkMetric(pdf,x,y,w,h,label,value,unit,formula){round(pdf,x,y,w,h,C.navy,C.navy,6);rtlCenter(pdf,label,x+w/2,y+16,3.4,'bold',C.white);ltr(pdf,value,x+w/2,y+32,7.4,'bold',C.white,'center');ltr(pdf,unit,x+w/2,y+41,3.4,'bold',C.white,'center');ltr(pdf,formula,x+w/2,y+51,2.7,'bold',[226,234,239],'center');}
+function tableRow(pdf,x,y,w,h,label,value){pdf.setDrawColor(...C.line);pdf.setLineWidth(.2);pdf.line(x,y+h,x+w,y+h);rtl(pdf,label,x+w-3,y+5.4,2.8,'normal',C.muted);hasHebrew(value)?rtl(pdf,value,x+46,y+5.4,3.0,'bold',C.navy):ltr(pdf,value,x+3,y+5.4,3.0,'bold',C.navy,'left');}
+function sideCard(pdf,x,y,w,h,label,value,ic){card(pdf,x,y,w,h,5);icon(pdf,ic,x+9,y+h/2,C.orange,5);rtl(pdf,label,x+w-6,y+8,2.8,'bold',C.muted);hasHebrew(value)?rtl(pdf,value,x+w-6,y+17,3.8,'bold',C.navy):ltr(pdf,value,x+w-6,y+17,3.8,'bold',C.navy,'right');}
+function noteCard(pdf,x,y,w,h,title,text){card(pdf,x,y,w,h,5);rtl(pdf,title,x+w-6,y+7.5,3.0,'bold',C.navy);rtl(pdf,text,x+w-6,y+15.5,2.7,'normal',C.muted,w-12);}
+function chartCard(pdf,x,y,w,h,title){card(pdf,x,y,w,h,5);rtlCenter(pdf,title,x+w/2,y+8,3.0,'bold',C.navy);}
+function monthlyChart(pdf,x,y,w,h,months){const max=Math.max(...months.map(m=>m.kwh),1),bw=3.2,g=1.7,base=y+h;pdf.setDrawColor(...C.grid);for(let i=0;i<4;i++)pdf.line(x,y+i*h/3,x+w,y+i*h/3);months.forEach((m,i)=>{const bx=x+i*(bw+g)+1,bh=(m.kwh/max)*(h-8);pdf.setFillColor(...C.orange);pdf.roundedRect(bx,base-bh,bw,bh,.7,.7,'F');rtlCenter(pdf,m.label,bx+bw/2,base+3.5,1.5,'bold',C.muted);});}
+function cashflowChart(pdf,x,y,w,h,points,payback){const vals=points.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,1),px=yr=>x+(yr/25)*w,py=v=>y+h-((v-min)/range)*h;pdf.setDrawColor(...C.grid);pdf.line(x,py(0),x+w,py(0));[0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+3.5,1.6,'normal',C.muted,'center');});pdf.setDrawColor(...C.navy);pdf.setLineWidth(.8);for(let i=1;i<points.length;i++)pdf.line(px(points[i-1].year),py(points[i-1].value),px(points[i].year),py(points[i].value));pdf.setFillColor(...C.orange);pdf.circle(px(Math.min(payback,25)),py(0),1.4,'F');}
+function summaryBand(pdf,x,y,w,h,p,v){round(pdf,x,y,w,h,C.navy,C.navy,5);const items=[['הכנסה מצטברת',money(p.totalIncome25)],['השקעה',money(v.costWithVat)],['רווח נקי',money(p.netProfit25)],['ROI',`${Math.round(p.roi25)}%`]];const col=w/4;items.forEach((it,i)=>{const cx=x+col*i+col/2;if(i){pdf.setDrawColor(58,79,96);pdf.line(x+col*i,y+4,x+col*i,y+h-4);}ltr(pdf,it[1],cx,y+10,3.7,'bold',C.white,'center');pdf.setDrawColor(...C.orange);pdf.setLineWidth(.7);pdf.line(cx-9,y+13,cx+9,y+13);it[0]==='ROI'?ltr(pdf,it[0],cx,y+20,2.5,'bold',[229,236,241],'center'):rtlCenter(pdf,it[0],cx,y+20,2.5,'bold',[229,236,241]);});}
+function sectionTitle(pdf,text,x,y){rtl(pdf,text,x,y,4.4,'bold',C.navy);}
+function footer(pdf,page){pdf.setDrawColor(...C.line);pdf.line(6,246,291,246);ltr(pdf,`${page} / 2`,7,252,2.4,'normal',C.muted,'left');ltr(pdf,'solatrix.energy',290,252,2.4,'bold',C.muted,'right');}
+function background(pdf){pdf.setFillColor(...C.paper);pdf.rect(0,0,297,210,'F');}
 function card(pdf,x,y,w,h,r=5){round(pdf,x,y,w,h,C.white,C.line,r);}
 function round(pdf,x,y,w,h,fill,stroke,r){pdf.setFillColor(...fill);pdf.setDrawColor(...stroke);pdf.setLineWidth(.25);pdf.roundedRect(x,y,w,h,r,r,'FD');}
 function rtl(pdf,text,x,y,size,style='normal',color=C.ink,maxWidth){pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(true);const out=maxWidth?pdf.splitTextToSize(String(text??''),maxWidth):String(text??'');pdf.text(out,x,y,{align:'right'});pdf.setR2L(false);}
 function rtlCenter(pdf,text,x,y,size,style='normal',color=C.ink,maxWidth){pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(true);const out=maxWidth?pdf.splitTextToSize(String(text??''),maxWidth):String(text??'');pdf.text(out,x,y,{align:'center'});pdf.setR2L(false);}
 function ltr(pdf,text,x,y,size,style='normal',color=C.ink,align='left'){pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(false);pdf.text(String(text??''),x,y,{align});}
+function icon(pdf,type,x,y,color=C.navy,s=5){pdf.setDrawColor(...color);pdf.setFillColor(...color);pdf.setLineWidth(.7);if(type==='check'){pdf.circle(x,y,s,'S');pdf.line(x-s*.45,y,x-s*.08,y+s*.35);pdf.line(x-s*.08,y+s*.35,x+s*.55,y-s*.4);}else if(type==='question'){pdf.circle(x,y,s,'S');ltr(pdf,'?',x,y+s*.35,s*.75,'bold',color,'center');}else if(type==='bolt'){pdf.line(x+s*.2,y-s,x-s*.2,y);pdf.line(x-s*.2,y,x+s*.15,y);pdf.line(x+s*.15,y,x-s*.25,y+s);}else if(type==='clock'){pdf.circle(x,y,s,'S');pdf.line(x,y,x,y-s*.55);pdf.line(x,y,x+s*.45,y+s*.2);}else if(type==='panel'){pdf.rect(x-s,y-s*.7,s*2,s*1.4,'S');pdf.line(x-s*.35,y-s*.7,x-s*.35,y+s*.7);pdf.line(x+s*.35,y-s*.7,x+s*.35,y+s*.7);pdf.line(x-s,y,x+s,y);}else if(type==='wallet'){pdf.roundedRect(x-s,y-s*.65,s*2,s*1.3,1,1,'S');pdf.line(x+s*.15,y-s*.2,x+s,y-s*.2);pdf.circle(x+s*.55,y-s*.2,.3,'F');}else if(type==='pin'){pdf.circle(x,y-s*.15,s*.55,'S');pdf.circle(x,y-s*.15,s*.15,'S');pdf.line(x-s*.35,y+s*.25,x,y+s);pdf.line(x,y+s,x+s*.35,y+s*.25);}else if(type==='user'){pdf.circle(x,y-s*.45,s*.35,'S');pdf.arc(x,y+s*.55,s*.7,s*.55,200,340,'S');}else if(type==='calendar'){pdf.rect(x-s*.75,y-s*.65,s*1.5,s*1.35,'S');pdf.line(x-s*.75,y-s*.2,x+s*.75,y-s*.2);}else if(type==='grid'){pdf.rect(x-s*.7,y-s*.7,s*1.4,s*1.4,'S');pdf.line(x,y-s*.7,x,y+s*.7);pdf.line(x-s*.7,y,x+s*.7,y);}else if(type==='bill'){pdf.rect(x-s*.6,y-s*.8,s*1.2,s*1.6,'S');pdf.line(x-s*.3,y-s*.3,x+s*.3,y-s*.3);pdf.line(x-s*.3,y,x+s*.3,y);pdf.line(x-s*.3,y+s*.3,x+s*.3,y+s*.3);}else if(type==='whatsapp'){pdf.circle(x,y,s*.8,'S');pdf.line(x-s*.5,y+s*.55,x-s*.75,y+s);}else if(type==='tag'){pdf.rect(x-s*.7,y-s*.45,s*1.4,s*.9,'S');pdf.circle(x-s*.35,y,.25,'S');}}
 function hasHebrew(v){return /[\u0590-\u05ff]/.test(String(v??''));}
 function mm(v){return v*2.8346457;}
 function n(v){const x=Number(v);return Number.isFinite(x)?x:0;}
