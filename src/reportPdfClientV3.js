@@ -35,26 +35,15 @@ function pageOne(pdf,c){
   bg(pdf);
   drawImageCover(pdf,c.hero,6,6,198,92);
 
-  // logo cut-out matching approved reference
-  pdf.setFillColor(...C.white);pdf.roundedRect(6,6,52,25,0,0,'F');
+  // The hero asset already contains the approved title, subtitle and validation badge.
+  // Only the logo cut-out is layered on top to avoid duplicated text.
+  pdf.setFillColor(...C.white);
+  pdf.roundedRect(6,6,52,25,0,0,'F');
   if(c.logo)contain(pdf,c.logo,12,8,38,20);
-
-  ltr(pdf,'ROOF CHECK BY SOLATRIX',198,14,2.35,'bold',C.orange,'right');
-  rtl(pdf,'הגיע הזמן לחסוך',198,29,8.0,'bold',C.white);
-  rtl(pdf,'בחשמל',198,41,10.0,'bold',C.orange);
-  rtl(pdf,'דוח מקצועי ואמין לבדיקת כדאיות',198,50,3.2,'normal',C.white);
-  rtl(pdf,'להתקנת מערכת סולארית.',198,56,3.2,'normal',C.white);
-
-  // single validation badge only
-  panel(pdf,13,74,67,18,C.navy,C.orange,5);
-  markCheck(pdf,23,83,C.orange,4.5);
-  rtl(pdf,'בדיקת התאמה ראשונית',74,81,3.0,'bold',C.white);
-  rtl(pdf,'וללא התחייבות',74,87,2.8,'bold',C.white);
 
   panel(pdf,6,103,198,12,C.orange,C.orange,5);
   rtlCenter(pdf,c.v.isCommercial?'בדיקת כדאיות למערכת מסחרית':'בדיקת כדאיות למערכת ביתית',105,111,5.0,'bold',C.navy);
 
-  // money-first hierarchy
   moneyHero(pdf,6,121,92,39,'הכנסה וחיסכון צפויים בשנה',money(c.v.annualSavings));
   metric(pdf,104,121,48,39,'עלות מערכת',money(c.v.costWithVat));
   metric(pdf,156,121,48,39,'החזר השקעה',`${one(c.v.paybackWithVat)} שנים`);
@@ -128,7 +117,6 @@ function chartBox(pdf,x,y,w,h,title){panel(pdf,x,y,w,h,C.white,C.line,5);rtlCent
 function monthlyChart(pdf,x,y,w,h,months){const max=Math.max(...months.map(m=>m.kwh),1),bw=4.1,g=2.7,base=y+h;pdf.setDrawColor(...C.grid);for(let i=0;i<3;i++)pdf.line(x,y+i*h/2,x+w,y+i*h/2);months.forEach((m,i)=>{const bx=x+i*(bw+g)+1,bh=(m.kwh/max)*(h-6);pdf.setFillColor(...C.orange);pdf.rect(bx,base-bh,bw,bh,'F');rtlCenter(pdf,m.label,bx+bw/2,base+3,1.4,'bold',C.muted);});}
 function cashChart(pdf,x,y,w,h,pts,payback){const vals=pts.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,1),px=yr=>x+(yr/25)*w,py=v=>y+h-((v-min)/range)*h;pdf.setDrawColor(...C.grid);[0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+3,1.5,'normal',C.muted,'center');});pdf.setDrawColor(...C.navy);pdf.setLineWidth(.8);for(let i=1;i<pts.length;i++)pdf.line(px(pts[i-1].year),py(pts[i-1].value),px(pts[i].year),py(pts[i].value));pdf.setFillColor(...C.orange);pdf.circle(px(Math.min(payback,25)),py(0),1.4,'F');}
 function summary(pdf,x,y,w,h,p,v){panel(pdf,x,y,w,h,C.navy,C.navy,5);const items=[['הכנסה ל־25 שנה',money(p.totalIncome25)],['השקעה',money(v.costWithVat)],['רווח נקי',money(p.netProfit25)],['ROI',`${Math.round(p.roi25)}%`]],cw=w/4;items.forEach((it,i)=>{const cx=x+cw*i+cw/2;if(i){pdf.setDrawColor(61,82,99);pdf.line(x+cw*i,y+4,x+cw*i,y+h-4);}ltr(pdf,it[1],cx,y+9,3.5,'bold',C.white,'center');pdf.setDrawColor(...C.orange);pdf.line(cx-10,y+12,cx+10,y+12);it[0]==='ROI'?ltr(pdf,it[0],cx,y+19,2.4,'bold',C.white,'center'):rtlCenter(pdf,it[0],cx,y+19,2.4,'bold',C.white);});}
-function markCheck(pdf,x,y,color,s){pdf.setDrawColor(...color);pdf.setLineWidth(.8);pdf.circle(x,y,s,'S');pdf.line(x-s*.45,y,x-s*.05,y+s*.35);pdf.line(x-s*.05,y+s*.35,x+s*.55,y-s*.35);}
 function panel(pdf,x,y,w,h,fill,stroke,r){pdf.setFillColor(...fill);pdf.setDrawColor(...stroke);pdf.setLineWidth(.25);pdf.roundedRect(x,y,w,h,r,r,'FD');}
 function bg(pdf){pdf.setFillColor(...C.paper);pdf.rect(0,0,210,297,'F');}
 function footer(pdf,page){pdf.setDrawColor(...C.line);pdf.line(6,292,204,292);ltr(pdf,`${page} / 2`,7,296,2.2,'normal',C.muted,'left');ltr(pdf,'solatrix.energy',203,296,2.2,'bold',C.muted,'right');}
