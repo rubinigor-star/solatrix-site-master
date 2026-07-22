@@ -1,19 +1,15 @@
 import './adminApp.css';
 import { getSupabaseClient, isSupabaseConfigured } from './lib/supabaseClient.js';
+import { coordinateText } from './lib/roofGeometry.js';
 
 const root = document.getElementById('admin-root');
 const STATUS_LABELS = {
-  new: 'Новый',
-  contact_required: 'Нужно связаться',
-  contacted: 'Связались',
-  site_visit_scheduled: 'Осмотр назначен',
-  site_visit_completed: 'Осмотр выполнен',
-  proposal_preparing: 'Готовится предложение',
-  proposal_sent: 'Предложение отправлено',
-  negotiation: 'Переговоры',
-  won: 'Сделка',
-  lost: 'Отказ',
-  not_relevant: 'Неактуально'
+  completed: 'Completed',
+  started: 'In Progress',
+  abandoned: 'Abandoned',
+  contacted: 'Contacted',
+  qualified: 'Qualified',
+  lost: 'Lost'
 };
 
 const state = {
@@ -24,6 +20,7 @@ const state = {
   selectedLead: null,
   reports: [],
   tasks: [],
+  events: [],
   search: '',
   status: 'all',
   source: 'all',
@@ -195,9 +192,9 @@ function renderApp() {
 
         <section class="crmStats">
           <div class="crmStat"><span>Всего активных</span><b>${stats.total}</b></div>
-          <div class="crmStat"><span>Новые</span><b>${stats.newLeads}</b></div>
-          <div class="crmStat"><span>Нужно связаться</span><b>${stats.needContact}</b></div>
-          <div class="crmStat"><span>Сделки</span><b>${stats.won}</b></div>
+          <div class="crmStat"><span>Completed</span><b>${stats.completed}</b></div>
+          <div class="crmStat"><span>In Progress</span><b>${stats.started}</b></div>
+          <div class="crmStat"><span>Abandoned</span><b>${stats.abandoned}</b></div>
         </section>
 
         <section class="crmPanel">
@@ -239,6 +236,7 @@ function renderLeadsTable(leads) {
 function renderLeadDrawer(lead) {
   const canEdit = ['admin', 'manager'].includes(state.profile.role);
   const tags = Array.isArray(lead.tags) ? lead.tags.join(', ') : '';
+  const roofGeometry = lead.metadata?.roofGeometry || null;
   return `
     <div class="crmDrawerBackdrop" data-action="close-drawer"></div>
     <aside class="crmDrawer" aria-label="Карточка клиента">
@@ -256,12 +254,25 @@ function renderLeadDrawer(lead) {
             ${infoCell('Объект', lead.property_type || '—')}
             ${infoCell('Счёт за электричество', lead.monthly_bill ? `₪${formatNumber(lead.monthly_bill)}` : '—')}
             ${infoCell('Удобное время', lead.preferred_contact_time || '—')}
+            ${infoCell('Шаг калькулятора', lead.calculator_step || '—')}
+            ${infoCell('Последняя активность', formatDateTime(lead.last_activity_at))}
           </div>
           <div class="crmQuickActions">
             <a href="tel:${escapeAttribute(lead.phone)}">Позвонить</a>
             <a class="whatsapp" href="https://wa.me/${normalizePhone(lead.phone)}" target="_blank" rel="noreferrer">WhatsApp</a>
             ${lead.email ? `<a href="mailto:${escapeAttribute(lead.email)}">Email</a>` : ''}
           </div>
+        </section>
+
+        <section class="crmDrawerSection">
+          <h3>Карта и геометрия крыши</h3>
+          <div class="crmInfoGrid">
+            ${infoCell('Площадь', roofGeometry?.areaM2 ? `${formatNumber(roofGeometry.areaM2)} м²` : '—')}
+            ${infoCell('Координаты', coordinateText(roofGeometry) || '—')}
+            ${infoCell('Провайдер карты', roofGeometry?.provider || '—')}
+            ${infoCell('Полигонов', roofGeometry?.geojson?.features?.length || '—')}
+          </div>
+          ${roofGeometry?.geojson ? `<details style="margin-top:12px"><summary>GeoJSON</summary><pre class="crmJson">${escapeHtml(JSON.stringify(roofGeometry.geojson, null, 2))}</pre></details>` : ''}
         </section>
 
         <section class="crmDrawerSection">
@@ -294,6 +305,11 @@ function renderLeadDrawer(lead) {
         </section>
 
         <section class="crmDrawerSection">
+          <h3>История lead_events</h3>
+          ${renderEvents()}
+        </section>
+
+        <section class="crmDrawerSection">
           <h3>Источник</h3>
           <div class="crmInfoGrid">
             ${infoCell('Тип', lead.source_type || '—')}
@@ -313,6 +329,15 @@ function renderReports() {
       <div class="crmReportHead"><b>${escapeHtml(report.report_type || 'roof-check')}</b><small>${formatDateTime(report.created_at)}</small></div>
       ${report.storage_path ? `<button class="crmSecondary" data-action="open-report" data-report-path="${escapeAttribute(report.storage_path)}" style="margin-top:9px">Открыть PDF</button>` : ''}
       <details style="margin-top:9px"><summary>Данные расчёта</summary><pre class="crmJson">${escapeHtml(JSON.stringify(report.calculation || {}, null, 2))}</pre></details>
+    </div>`).join('')}</div>`;
+}
+
+function renderEvents() {
+  if (!state.events.length) return '<p style="margin:0;color:var(--crm-muted)">Событий пока нет.</p>';
+  return `<div class="crmEventList">${state.events.map((event) => `
+    <div class="crmEvent">
+      <div class="crmEventHead"><b>${escapeHtml(event.event_type)}</b><small>${formatDateTime(event.created_at)}</small></div>
+      ${event.payload && Object.keys(event.payload).length ? `<pre class="crmJson">${escapeHtml(JSON.stringify(event.payload, null, 2))}</pre>` : ''}
     </div>`).join('')}</div>`;
 }
 
@@ -370,18 +395,22 @@ async function selectLead(id) {
   state.selectedLead = state.leads.find((lead) => lead.id === id) || null;
   state.reports = [];
   state.tasks = [];
+  state.events = [];
   renderApp();
   if (!state.selectedLead) return;
 
-  const [reportsResult, tasksResult] = await Promise.all([
+  const [reportsResult, tasksResult, eventsResult] = await Promise.all([
     state.supabase.from('reports').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
-    state.supabase.from('tasks').select('*').eq('lead_id', id).order('created_at', { ascending: false })
+    state.supabase.from('tasks').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
+    state.supabase.from('lead_events').select('*').eq('lead_id', id).order('created_at', { ascending: false })
   ]);
 
   state.reports = reportsResult.data || [];
   state.tasks = tasksResult.data || [];
+  state.events = eventsResult.data || [];
   if (reportsResult.error) showToast(reportsResult.error.message, true);
   if (tasksResult.error) showToast(tasksResult.error.message, true);
+  if (eventsResult.error) showToast(eventsResult.error.message, true);
   renderApp();
 }
 
@@ -389,6 +418,7 @@ function closeDrawer() {
   state.selectedLead = null;
   state.reports = [];
   state.tasks = [];
+  state.events = [];
   renderApp();
 }
 
@@ -404,9 +434,11 @@ async function saveLeadDetails(event) {
     internal_notes: String(values.internal_notes || '').trim() || null,
     lost_reason: String(values.lost_reason || '').trim() || null,
     tags,
-    last_contacted_at: ['contacted', 'site_visit_scheduled', 'site_visit_completed', 'proposal_preparing', 'proposal_sent', 'negotiation', 'won'].includes(values.status)
+    last_contacted_at: ['contacted', 'qualified'].includes(values.status)
       ? new Date().toISOString()
-      : state.selectedLead.last_contacted_at
+      : state.selectedLead.last_contacted_at,
+    completed_at: values.status === 'completed' ? (state.selectedLead.completed_at || new Date().toISOString()) : state.selectedLead.completed_at,
+    abandoned_at: values.status === 'abandoned' ? (state.selectedLead.abandoned_at || new Date().toISOString()) : values.status === 'started' ? null : state.selectedLead.abandoned_at
   };
 
   const { data, error } = await state.supabase
@@ -421,15 +453,17 @@ async function saveLeadDetails(event) {
     return;
   }
 
-  await state.supabase.from('lead_events').insert({
+  const eventRecord = {
     lead_id: data.id,
     actor_id: state.profile.id,
-    event_type: 'lead_updated',
-    payload: update
-  });
+    event_type: state.selectedLead.status === data.status ? 'lead_updated' : 'lead_status_changed',
+    payload: { ...update, previousStatus: state.selectedLead.status }
+  };
+  const { data: savedEvent } = await state.supabase.from('lead_events').insert(eventRecord).select('*').single();
 
   state.leads = state.leads.map((lead) => lead.id === data.id ? data : lead);
   state.selectedLead = data;
+  if (savedEvent) state.events = [savedEvent, ...state.events];
   showToast('Карточка сохранена.');
   renderApp();
 }
@@ -506,9 +540,9 @@ function filteredLeads() {
 function calculateStats(leads) {
   return {
     total: leads.length,
-    newLeads: leads.filter((lead) => lead.status === 'new').length,
-    needContact: leads.filter((lead) => ['new', 'contact_required'].includes(lead.status)).length,
-    won: leads.filter((lead) => lead.status === 'won').length
+    completed: leads.filter((lead) => lead.status === 'completed').length,
+    started: leads.filter((lead) => lead.status === 'started').length,
+    abandoned: leads.filter((lead) => lead.status === 'abandoned').length
   };
 }
 
@@ -561,6 +595,8 @@ function exportColumns() {
     { label: 'UTM source', value: (lead) => lead.utm_source },
     { label: 'UTM campaign', value: (lead) => lead.utm_campaign },
     { label: 'Следующий контакт', value: (lead) => lead.next_follow_up_at },
+    { label: 'Шаг калькулятора', value: (lead) => lead.calculator_step },
+    { label: 'Последняя активность', value: (lead) => lead.last_activity_at },
     { label: 'Заметки', value: (lead) => lead.internal_notes }
   ];
 }

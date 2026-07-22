@@ -2,6 +2,7 @@ import './styles.css';
 import './src/router.css';
 import { buildFullPdfReport } from './src/pdfReport.js';
 import { getLeads, saveLead, updateLeadStatus, LEAD_STATUSES } from './src/leadsStore.js';
+import { calculateRoofCheckEconomics, ROOF_CHECK_DEFAULTS } from './src/roofCheckEconomics.js';
 
 const CONFIG = {
   productionPerKw: 1650,
@@ -13,7 +14,7 @@ const CONFIG = {
   usableRoofFactor: 0.82,
   yearlyTariffGrowth: 0.04,
   yearlyPanelDegradation: 0.005,
-  defaultPhone: '972547299727'
+  defaultPhone: '972542790088'
 };
 
 const LOGO_SRC = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_298,h_194,al_c,q_90,enc_avif,quality_auto/Solatrix%20Logo%20Sait%20Main.png';
@@ -104,20 +105,14 @@ function calculateReport() {
   ensureDefaultSurface();
   const systemKw = state.surfaces.reduce((sum, s) => sum + calculateSurface(s).kw, 0);
   const weightedFactor = state.surfaces.reduce((sum, s) => sum + s.factor * calculateSurface(s).kw, 0) / Math.max(systemKw, 1);
-  const annualProduction = systemKw * CONFIG.productionPerKw * weightedFactor;
-  const annualConsumption = (Number(state.monthlyBill || 0) * 12) / CONFIG.buyRate;
-  const selfConsumed = Math.min(annualProduction * 0.45, annualConsumption);
-  const exported = Math.max(annualProduction - selfConsumed, 0);
-  const annualSavings = selfConsumed * CONFIG.buyRate + exported * CONFIG.sellRate;
-  const effectiveTariff = annualSavings / Math.max(annualProduction, 1);
-  const selfUseShare = selfConsumed / Math.max(annualProduction, 1) * 100;
-  const cost = systemKw * CONFIG.installCostPerKw;
-  const payback = cost / Math.max(annualSavings, 1);
-  const profit25 = annualSavings * 25 - cost;
+  const economics = calculateRoofCheckEconomics(
+    { systemSizeKwp: systemKw, monthlyBill: state.monthlyBill },
+    { annualYieldKwhPerKwp: ROOF_CHECK_DEFAULTS.annualYieldKwhPerKwp * weightedFactor }
+  );
   const panels = state.surfaces.reduce((sum, s) => sum + calculateSurface(s).panels, 0);
   const roofArea = state.surfaces.reduce((sum, s) => sum + s.area, 0);
   const usableArea = state.surfaces.reduce((sum, s) => sum + calculateSurface(s).usableArea, 0);
-  return { systemKw, annualProduction, annualConsumption, selfConsumed, exported, annualSavings, effectiveTariff, selfUseShare, cost, payback, profit25, panels, roofArea, usableArea };
+  return { ...economics, systemKw, panels, roofArea, usableArea };
 }
 
 function createCurrentLead(report = calculateReport()) {

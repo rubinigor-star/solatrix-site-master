@@ -1,18 +1,10 @@
+import { calculateRoofCheckEconomics } from './roofCheckEconomics.js';
+
 const PATCH_ID = 'solatrix-report-calculation-authority-v1';
 const MANUAL_CHOICE_KEY = 'solatrix_urban_manual_choice_v1';
 const MANUAL_IDENTITY_KEY = 'solatrix_urban_manual_identity_v1';
 const OVERRIDE_MAP_KEY = 'solatrix_urban_bonus_override_v1';
 const ADDRESS_KEY = 'solatrix_roof_check_address';
-
-const CONFIG = {
-  buyRate: 0.64,
-  homeExportRate: 0.48,
-  commercialExportRate: 0.40,
-  urbanBonusRate: 0.06,
-  urbanBonusYears: 10,
-  contractYears: 25,
-  electricityGrowthRate: 0.04
-};
 
 let applying = false;
 let queued = false;
@@ -109,39 +101,18 @@ function recalculateForChoice(choice) {
   if (!model || !['yes', 'no'].includes(choice)) return;
 
   const eligible = choice === 'yes';
-  const annualProduction = Number(model.annualProduction || 0);
-  const selfConsumed = Number(model.selfConsumed || 0);
-  const exported = Number(model.exported || 0);
   const isCommercial = model.isCommercial === true;
-  const baseExportRate = isCommercial ? CONFIG.commercialExportRate : CONFIG.homeExportRate;
-  const revenues = [];
-
-  for (let year = 0; year < CONFIG.contractYears; year += 1) {
-    const bonus = eligible && year < CONFIG.urbanBonusYears ? CONFIG.urbanBonusRate : 0;
-    if (isCommercial) {
-      revenues.push(annualProduction * (baseExportRate + bonus));
-    } else {
-      const selfUseValue = selfConsumed * CONFIG.buyRate * Math.pow(1 + CONFIG.electricityGrowthRate, year);
-      revenues.push(selfUseValue + exported * (baseExportRate + bonus));
-    }
-  }
-
-  const annualSavings = revenues[0] || 0;
-  const costBeforeVat = Number(model.costBeforeVat || 0);
-  const costWithVat = Number(model.costWithVat || 0);
-  const gross25 = revenues.reduce((sum, value) => sum + value, 0);
+  const economics = calculateRoofCheckEconomics({
+    systemSizeKwp: Number(model.systemSizeKwp || model.systemKw || 0),
+    isCommercial,
+    monthlyBill: Number(model.monthlyBill || 0),
+    urbanEligible: eligible
+  });
 
   Object.assign(model, {
+    ...economics,
     urbanEligible: eligible,
-    urbanDetectionMode: 'manual',
-    annualRevenueByYear: revenues,
-    annualSavings,
-    effectiveTariff: annualSavings / Math.max(annualProduction, 1),
-    paybackBeforeVat: costBeforeVat / Math.max(annualSavings, 1),
-    paybackWithVat: costWithVat / Math.max(annualSavings, 1),
-    gross25,
-    profit25WithVat: gross25 - costWithVat,
-    urbanBonusTotal: eligible ? exported * CONFIG.urbanBonusRate * CONFIG.urbanBonusYears : 0
+    urbanDetectionMode: 'manual'
   });
 }
 

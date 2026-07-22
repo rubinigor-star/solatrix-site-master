@@ -6,17 +6,18 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build --config vite.preview.config.js --outDir dist --emptyOutDir",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test"
   },
   "dependencies": {
-    "@supabase/supabase-js": "latest",
-    "@vitejs/plugin-react": "latest",
+    "@supabase/supabase-js": "2.110.8",
+    "@vitejs/plugin-react": "6.0.4",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
-    "vite": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "lucide-react": "latest"
+    "vite": "8.1.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "lucide-react": "1.25.0"
   },
   "devDependencies": {}
 }
