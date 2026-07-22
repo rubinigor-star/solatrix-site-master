@@ -1,10 +1,12 @@
 import './reportUxFix.css';
 import './reportTypographyPatch.js';
-import { getRoofCheckLifecycleSession, LeadSubmissionError, syncRoofCheckLead } from './lib/leadApi.js';
+import { getRoofCheckLifecycleSession, isValidIsraeliPhone, LeadSubmissionError, syncRoofCheckLead } from './lib/leadApi.js';
 import { formatPublicLeadReference } from './lib/publicReference.js';
 import { blobToBase64, createRoofCheckPdf } from './reportPdfClient.js';
 
 const DRAFT_KEY = 'solatrix_roof_check_lead_draft';
+let startedLeadTimer = 0;
+let startedLeadSignature = '';
 
 function enhanceReportExperience() {
   const reportCard = document.querySelector('.reportCard');
@@ -61,6 +63,41 @@ function enhanceReportExperience() {
   offer.querySelector('[data-submit-report-request]')?.addEventListener('click', () => {
     submitWhatsappReport({ offer, reportCard, originalName, originalPhone, originalEmail });
   });
+  const scheduleStart = () => scheduleStartedLead(offer);
+  offer.querySelector('input[name="phone"]')?.addEventListener('input', scheduleStart);
+  offer.querySelector('input[name="consent"]')?.addEventListener('change', scheduleStart);
+  scheduleStart();
+}
+
+function scheduleStartedLead(offer) {
+  const phone = offer.querySelector('input[name="phone"]')?.value?.trim() || '';
+  const consent = offer.querySelector('input[name="consent"]')?.checked === true;
+  if (!consent || !isValidIsraeliPhone(phone)) return;
+
+  const signature = `${normalizePhone(phone)}:consented`;
+  if (signature === startedLeadSignature) return;
+  window.clearTimeout(startedLeadTimer);
+  startedLeadTimer = window.setTimeout(async () => {
+    try {
+      await syncRoofCheckLead({
+        phone,
+        consent: true,
+        lifecycleAction: 'start',
+        calculatorStep: 'report',
+        cityOrAddress: document.querySelector('[data-field="address"]')?.value || '',
+        monthlyBill: document.querySelector('[data-field="monthlyBill"]')?.value || '',
+        metadata: {
+          roofCheckLifecycle: true,
+          calculatorStep: 'report',
+          roofGeometry: serializableRoofGeometry(),
+          calculation: serializableCalculationModel()
+        }
+      });
+      startedLeadSignature = signature;
+    } catch (error) {
+      console.warn('Roof Check started lead was not saved.', error);
+    }
+  }, 600);
 }
 
 async function submitWhatsappReport({ offer, reportCard, originalName, originalPhone, originalEmail }) {

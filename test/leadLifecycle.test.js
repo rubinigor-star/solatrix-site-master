@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { isValidIsraeliPhone, validateLeadPayload } from '../src/lib/leadApi.js';
 
 test('started lead requires a valid phone and consent but not a name', () => {
@@ -28,4 +29,11 @@ test('Israeli local and international mobile formats are accepted', () => {
   assert.equal(isValidIsraeliPhone('054-279-0088'), true);
   assert.equal(isValidIsraeliPhone('972542790088'), true);
   assert.equal(isValidIsraeliPhone('04-1234567'), false);
+});
+
+test('lead lifecycle never blocks calculator navigation with a phone gate', () => {
+  const lifecycleSource = readFileSync(new URL('../src/roofCheckLeadLifecycle.js', import.meta.url), 'utf8');
+  assert.equal(lifecycleSource.includes('enforceLeadGate'), false);
+  assert.equal(lifecycleSource.includes('toggleAddressNext'), false);
+  assert.equal(lifecycleSource.includes('data-lifecycle-phone'), false);
 });
