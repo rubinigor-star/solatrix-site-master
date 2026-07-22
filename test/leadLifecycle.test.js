@@ -53,3 +53,12 @@ test('roof map starts from a neutral overview and resolves every entered address
   assert.match(mapSource, /setView\(center, 8\)/);
   assert.match(mapSource, /setView\(\[point\.lat, point\.lng\], mapProvider\.maxZoom\)/);
 });
+
+test('address field uses debounced official street and city suggestions', () => {
+  const autocompleteSource = readFileSync(new URL('../src/roofAddressAutocomplete.js', import.meta.url), 'utf8');
+  assert.match(autocompleteSource, /data\.gov\.il\/api\/3\/action\/datastore_search/);
+  assert.match(autocompleteSource, /DEBOUNCE_MS = 280/);
+  assert.match(autocompleteSource, /שם_רחוב/);
+  assert.match(autocompleteSource, /שם_ישוב/);
+  assert.equal(autocompleteSource.includes('nominatim.openstreetmap.org'), false);
+});
