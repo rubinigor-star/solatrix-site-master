@@ -1,6 +1,6 @@
 import './reportUxFix.css';
 import './reportTypographyPatch.js';
-import { LeadSubmissionError, submitLead } from './lib/leadApi.js';
+import { getRoofCheckLifecycleSession, LeadSubmissionError, syncRoofCheckLead } from './lib/leadApi.js';
 import { formatPublicLeadReference } from './lib/publicReference.js';
 import { blobToBase64, createRoofCheckPdf } from './reportPdfClient.js';
 
@@ -22,6 +22,7 @@ function enhanceReportExperience() {
   originalLeadFields.hidden = true;
 
   const draft = readDraft();
+  const lifecycleSession = getRoofCheckLifecycleSession();
   const originalName = originalLeadFields.querySelector('[data-field="leadName"]');
   const originalPhone = originalLeadFields.querySelector('[data-field="leadPhone"]');
   const originalEmail = originalLeadFields.querySelector('[data-stage-field="email"]');
@@ -41,11 +42,11 @@ function enhanceReportExperience() {
     <div class="reportWhatsappForm" data-report-form>
       <p class="reportWhatsappFormIntro">מלאו את הפרטים ואשרו שנוכל לשלוח את הדוח ולחזור אליכם בנוגע לבדיקה ולהצעה.</p>
       <div class="reportWhatsappGrid">
-        <label><span>שם מלא *</span><input name="name" autocomplete="name" value="${escapeAttr(originalName?.value || draft.name || '')}" /></label>
-        <label><span>מספר WhatsApp *</span><input name="phone" autocomplete="tel" inputmode="tel" value="${escapeAttr(originalPhone?.value || draft.phone || '')}" /></label>
-        <label class="wide"><span>אימייל (לא חובה)</span><input name="email" autocomplete="email" type="email" value="${escapeAttr(originalEmail?.value || draft.email || '')}" /></label>
+        <label><span>שם מלא *</span><input name="name" autocomplete="name" maxlength="160" value="${escapeAttr(originalName?.value || draft.name || '')}" /></label>
+        <label><span>מספר WhatsApp *</span><input name="phone" autocomplete="tel" inputmode="tel" maxlength="40" value="${escapeAttr(originalPhone?.value || draft.phone || lifecycleSession.phone || '')}" /></label>
+        <label class="wide"><span>אימייל (לא חובה)</span><input name="email" autocomplete="email" type="email" maxlength="320" value="${escapeAttr(originalEmail?.value || draft.email || '')}" /></label>
       </div>
-      <label class="reportWhatsappConsent"><input type="checkbox" name="consent" /><span>אני מבקש/ת לקבל את דוח ה-PDF ב-WhatsApp ומאשר/ת לנציג Solatrix Energy ליצור איתי קשר בנוגע לבדיקה ולהצעה.</span></label>
+      <label class="reportWhatsappConsent"><input type="checkbox" name="consent" ${lifecycleSession.consent ? 'checked' : ''} /><span>אני מבקש/ת לקבל את דוח ה-PDF ב-WhatsApp ומאשר/ת לנציג Solatrix Energy ליצור איתי קשר בנוגע לבדיקה ולהצעה.</span></label>
       <p class="reportWhatsappError" data-report-error hidden></p>
       <button class="reportWhatsappSubmit" type="button" data-submit-report-request>שליחת הדוח ל-WhatsApp</button>
       <div class="reportWhatsappSuccess" data-report-success hidden tabindex="-1"></div>
@@ -75,6 +76,7 @@ async function submitWhatsappReport({ offer, reportCard, originalName, originalP
   successNode.hidden = true;
   const errors = [];
   if (name.length < 2) errors.push('נא להזין שם מלא.');
+  if (name.length > 160) errors.push('השם ארוך מדי.');
   if (!/^(?:9725\d{8}|05\d{8})$/.test(phone.replace(/\D/g, ''))) errors.push('נא להזין מספר WhatsApp תקין.');
   if (email && !/^\S+@\S+\.\S+$/.test(email)) errors.push('כתובת האימייל אינה תקינה.');
   if (!consent) errors.push('כדי לקבל את הדוח יש לאשר את הבקשה ואת יצירת הקשר.');
@@ -99,11 +101,13 @@ async function submitWhatsappReport({ offer, reportCard, originalName, originalP
     const safeName = name.replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '') || 'customer';
     const filename = `solatrix-roof-check-${safeName}-${Date.now()}.pdf`;
 
-    const result = await submitLead({
+    const result = await syncRoofCheckLead({
       name,
       phone,
       email,
       consent: true,
+      lifecycleAction: 'complete',
+      calculatorStep: 'completed',
       sourceType: 'roof-check-whatsapp-report',
       sourcePage: location.pathname,
       cityOrAddress: document.querySelector('[data-field="address"]')?.value || '',
@@ -119,6 +123,7 @@ async function submitWhatsappReport({ offer, reportCard, originalName, originalP
         whatsappReportRequested: true,
         recipientPhone: normalizePhone(phone),
         roofType: reportData.roofData.roofType,
+        roofGeometry: reportData.roofData.geometry,
         urbanEligible: reportData.roofData.urbanEligible,
         urbanLocality: reportData.roofData.urbanLocality
       }
@@ -160,6 +165,8 @@ function collectReportData(reportCard, phone) {
       urbanLocality: calculationModel?.urbanLocality || '',
       urbanPopulation: calculationModel?.urbanPopulation || null,
       surfaces: Array.isArray(window.__solatrixRoofSurfaces) ? window.__solatrixRoofSurfaces : [],
+      geometry: serializableRoofGeometry(),
+      coordinates: window.__solatrixRoofGeometry?.centroid || null,
       obstacles: [...document.querySelectorAll('.obstacle.selected')].map((node) => node.textContent?.replace(/\s+/g, ' ').trim()).filter(Boolean)
     },
     metadata: {
@@ -167,7 +174,7 @@ function collectReportData(reportCard, phone) {
       deliveryChannel: 'whatsapp',
       deliveryStatus: 'pending_whatsapp_connection',
       recipientPhone: normalizePhone(phone),
-      consentTextVersion: 'whatsapp-report-v3',
+      consentTextVersion: 'whatsapp-report-v2',
       consentAt: new Date().toISOString(),
       calculatorVersion: new URLSearchParams(location.search).get('v') || 'roof-check-master-v1',
       tariffModelVersion: 'home-commercial-urban-v1',
@@ -180,6 +187,16 @@ function serializableCalculationModel() {
   try {
     return window.__solatrixRoofCalculation
       ? JSON.parse(JSON.stringify(window.__solatrixRoofCalculation))
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function serializableRoofGeometry() {
+  try {
+    return window.__solatrixRoofGeometry
+      ? JSON.parse(JSON.stringify(window.__solatrixRoofGeometry))
       : null;
   } catch {
     return null;

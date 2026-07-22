@@ -1,7 +1,6 @@
-const VAT_RATE = 0.18;
+import { calculateRoofCheckEconomics, ROOF_CHECK_DEFAULTS } from './roofCheckEconomics.js';
+
 const HOME_SYSTEM_LIMIT_KW = 22.5;
-const DEFAULT_SELF_USE_SHARE = 0.4;
-const DEFAULT_ELECTRICITY_GROWTH = 0.04;
 
 export function buildFullPdfReport({ report = {}, state = {}, config = {}, logoSrc = '', formatNumber, formatMoney } = {}) {
   const number = formatNumber || ((value) => Math.round(Number(value) || 0).toLocaleString('he-IL'));
@@ -10,7 +9,7 @@ export function buildFullPdfReport({ report = {}, state = {}, config = {}, logoS
   const customerName = state.leadName || 'משפחת לקוח';
   const address = state.address || 'כתובת הגג שהוזנה בבדיקה';
   const coordinates = coordinateText(state) || 'ייקבע לפי סימון המפה';
-  const defaultPhone = digitsOnly(config.defaultPhone || '972547299727');
+  const defaultPhone = digitsOnly(config.defaultPhone || '972542790088');
   const whatsappUrl = `https://wa.me/${defaultPhone}`;
   const logo = logoSrc
     ? `<img class="brandLogo" src="${escapeAttribute(logoSrc)}" alt="Solatrix Energy" />`
@@ -69,7 +68,7 @@ h1,h2,h3,p{margin:0}h1{font-size:53px;line-height:.98;letter-spacing:-.045em;fon
 <section class="page"><div class="glow"></div><div class="inner">
 <div class="header"><div class="brand">${logo}</div><div class="docType">החזר, בדיקות והשלב הבא</div></div>
 <div class="split"><div><div class="kicker">25 year view</div><h2 style="margin-top:3mm">מה קורה לאורך 25 שנה?</h2><p class="lead" style="margin-top:4mm">הקוט״ש שנמכר לרשת מחושב לפי ₪0.48. הקוט״ש שנחסך בבית מתחיל ב-₪0.64 ועולה לפי הנחת 4% בשנה.</p><div class="timeline" style="margin-top:6mm"><div class="timeRow"><span>שנה 1</span><div class="timeBar" style="width:28%"></div><b>${money(calc.annualSavings)}</b></div><div class="timeRow"><span>ממוצע קוט״ש 25 שנה</span><div class="timeBar" style="width:58%"></div><b>₪${calc.avgTariff25.toFixed(3)}</b></div><div class="timeRow"><span>חיסכון 25 שנה</span><div class="timeBar" style="width:100%"></div><b>${money(calc.gross25)}</b></div><div class="timeRow"><span>רווח נטו כולל מע״מ</span><div class="timeBar" style="width:88%"></div><b>${money(calc.profit25WithVat)}</b></div></div></div><div><h2>מה בודקים לפני הצעה סופית?</h2><div class="checkGrid" style="margin-top:5mm"><div class="check"><div class="checkIcon">☀</div><div><h3>הצללות</h3><p>עצים, בניינים, דודים ומכשולים שעלולים להשפיע על הייצור.</p></div></div><div class="check"><div class="checkIcon">⌂</div><div><h3>מצב הגג</h3><p>סוג הגג, יציבות, איטום וגישה בטוחה להתקנה.</p></div></div><div class="check"><div class="checkIcon">⚡</div><div><h3>חיבור חשמל</h3><p>בדיקה ראשונית של לוח החשמל והתאמה לחיבור.</p></div></div><div class="check"><div class="checkIcon">✓</div><div><h3>אישורים</h3><p>התאמת התכנון לכללים ולדרישות הרלוונטיות.</p></div></div></div></div></div>
-<h2 style="margin-top:7mm">איך ממשיכים מכאן?</h2><div class="process"><div class="step"><div class="num">1</div><h3>בודקים</h3><p>מאמתים את נתוני הגג והצריכה.</p></div><div class="step"><div class="num">2</div><h3>מסבירים</h3><p>עוברים יחד על מחיר, חיסכון והחזר.</p></div><div class="step"><div class="num">3</div><h3>מתכננים</h3><p>מכינים תכנון מתאים לנכס.</p></div><div class="step"><div class="num">4</div><h3>מתקינים</h3><p>התקנה מסודרת ובטוחה.</p></div><div class="step"><div class="num">5</div><h3>מלווים</h3><p>מעקב גם אחרי ההפעלה.</p></div></div><div class="ctaBand"><div><h2 style="color:white">מחיר ברור. החלטה רגועה.</h2><p class="lead">בלי הבטחות מוגזמות, בלי מחיר מוסתר ובלי לחץ.</p><a class="whatsapp" href="${escapeAttribute(whatsappUrl)}" target="_blank" rel="noopener">WhatsApp · דברו איתנו</a></div><div class="contact"><a href="tel:+${defaultPhone}">☎ 054-729-9727</a><a href="mailto:info@solatrix.energy">✉ info@solatrix.energy</a><a href="https://solatrix.energy" target="_blank" rel="noopener">🌐 solatrix.energy</a></div></div>
+<h2 style="margin-top:7mm">איך ממשיכים מכאן?</h2><div class="process"><div class="step"><div class="num">1</div><h3>בודקים</h3><p>מאמתים את נתוני הגג והצריכה.</p></div><div class="step"><div class="num">2</div><h3>מסבירים</h3><p>עוברים יחד על מחיר, חיסכון והחזר.</p></div><div class="step"><div class="num">3</div><h3>מתכננים</h3><p>מכינים תכנון מתאים לנכס.</p></div><div class="step"><div class="num">4</div><h3>מתקינים</h3><p>התקנה מסודרת ובטוחה.</p></div><div class="step"><div class="num">5</div><h3>מלווים</h3><p>מעקב גם אחרי ההפעלה.</p></div></div><div class="ctaBand"><div><h2 style="color:white">מחיר ברור. החלטה רגועה.</h2><p class="lead">בלי הבטחות מוגזמות, בלי מחיר מוסתר ובלי לחץ.</p><a class="whatsapp" href="${escapeAttribute(whatsappUrl)}" target="_blank" rel="noopener">WhatsApp · דברו איתנו</a></div><div class="contact"><a href="tel:+${defaultPhone}">☎ 054-279-0088</a><a href="mailto:info@solatrix.energy">✉ info@solatrix.energy</a><a href="https://solatrix.energy" target="_blank" rel="noopener">🌐 solatrix.energy</a></div></div>
 </div><div class="footer"><span>חישוב שקוף + בדיקה מקצועית לפני הצעה מחייבת</span><b>03</b></div></section>
 </main>
 </body>
@@ -78,40 +77,30 @@ h1,h2,h3,p{margin:0}h1{font-size:53px;line-height:.98;letter-spacing:-.045em;fon
 
 function buildCalculation(report, state, config) {
   const productionPerKw = toNumber(config.productionPerKw, 1650);
-  const buyRate = toNumber(config.buyRate, 0.64);
-  const sellRate = toNumber(config.sellRate, 0.48);
-  const pricePerKw = toNumber(config.installCostPerKw, 2900);
-  const electricityGrowth = toNumber(config.electricityGrowthRate, DEFAULT_ELECTRICITY_GROWTH);
   const roofArea = toNumber(report.roofArea, 0);
   const usableArea = toNumber(report.usableArea, 0);
   const roofPotentialKw = Math.max(toNumber(report.systemKw, HOME_SYSTEM_LIMIT_KW), 0);
   const systemLimit = toNumber(config.homeSystemLimitKw, HOME_SYSTEM_LIMIT_KW);
-  const systemKw = Math.min(roofPotentialKw || systemLimit, systemLimit);
+  const isCommercial = report.isCommercial === true || state.roofType === 'commercial';
+  const systemKw = isCommercial ? roofPotentialKw : Math.min(roofPotentialKw || systemLimit, systemLimit);
   const factor = toNumber(report.weightedFactor, 1);
-  const annualProduction = systemKw * productionPerKw * factor;
-  const annualConsumption = (toNumber(state.monthlyBill, 850) * 12) / buyRate;
-  const targetSelf = annualProduction * toNumber(config.defaultSelfUseShare, DEFAULT_SELF_USE_SHARE);
-  const selfConsumed = Math.min(targetSelf, annualConsumption);
-  const exported = Math.max(annualProduction - selfConsumed, 0);
-  const selfUseShare = annualProduction ? selfConsumed / annualProduction : DEFAULT_SELF_USE_SHARE;
-  const exportShare = Math.max(0, 1 - selfUseShare);
-  const annualSavings = selfConsumed * buyRate + exported * sellRate;
-  const effectiveTariff = annualSavings / Math.max(annualProduction, 1);
-  const costBeforeVat = systemKw * pricePerKw;
-  const costWithVat = costBeforeVat * (1 + VAT_RATE);
-  const paybackBeforeVat = costBeforeVat / Math.max(annualSavings, 1);
-  const paybackWithVat = costWithVat / Math.max(annualSavings, 1);
-  let gross25 = 0;
-  for (let year = 0; year < 25; year += 1) {
-    gross25 += selfConsumed * buyRate * Math.pow(1 + electricityGrowth, year) + exported * sellRate;
-  }
-  const avgTariff25 = gross25 / Math.max(annualProduction * 25, 1);
+  const economics = calculateRoofCheckEconomics(
+    { systemSizeKwp: systemKw, isCommercial, monthlyBill: state.monthlyBill },
+    { annualYieldKwhPerKwp: productionPerKw * factor }
+  );
   return {
-    systemKw, productionPerKw, annualProduction, annualConsumption, selfConsumed, exported,
-    selfUseShare, exportShare, annualSavings, effectiveTariff, buyRate, sellRate, pricePerKw,
-    costBeforeVat, costWithVat, paybackBeforeVat, paybackWithVat, roofArea, usableArea,
-    electricityGrowth, gross25, avgTariff25, profit25BeforeVat: gross25 - costBeforeVat,
-    profit25WithVat: gross25 - costWithVat
+    ...economics,
+    systemKw,
+    productionPerKw,
+    selfUseShare: economics.selfConsumptionShare,
+    exportShare: economics.gridExportShare,
+    buyRate: ROOF_CHECK_DEFAULTS.selfConsumptionValuePerKwh,
+    sellRate: isCommercial ? ROOF_CHECK_DEFAULTS.commercialTariffPerKwh : ROOF_CHECK_DEFAULTS.gridExportTariffPerKwh,
+    pricePerKw: economics.pricePerKwp,
+    roofArea,
+    usableArea,
+    electricityGrowth: ROOF_CHECK_DEFAULTS.annualElectricityPriceGrowth,
+    profit25BeforeVat: economics.totalIncome25 - economics.costBeforeVat
   };
 }
 

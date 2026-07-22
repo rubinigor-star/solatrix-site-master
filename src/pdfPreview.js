@@ -16,7 +16,13 @@ const sample = {
       monthlyBill: 850,
       urbanEligible: true,
       urbanLocality: 'חיפה',
-      surfaces: [{ area: 162 }]
+      surfaces: [{ area: 162 }],
+      geometry: {
+        provider: 'existing-imagery',
+        areaM2: 162,
+        centroid: { lat: 32.79370, lng: 34.98920 },
+        geojson: { type: 'FeatureCollection', features: [] }
+      }
     },
     calculationModel: {
       address: 'ויצו 24, חיפה',

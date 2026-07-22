@@ -12,6 +12,7 @@ function fixRtlParentheses(value) {
 
 function installPdfRtlParenthesesPatch() {
   if (jsPDF.API.__solatrixRtlParenthesesPatched) return;
+  if (typeof jsPDF.API.text !== 'function') return;
   jsPDF.API.__solatrixRtlParenthesesPatched = true;
   const nativeText = jsPDF.API.text;
   jsPDF.API.text = function patchedText(text, ...args) {

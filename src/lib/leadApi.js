@@ -2,6 +2,7 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js';
 
 const FIRST_TOUCH_KEY = 'solatrix_first_touch_attribution';
 const DEVELOPMENT_LEADS_KEY = 'solatrix_development_leads';
+const ROOF_CHECK_SESSION_KEY = 'solatrix_roof_check_lifecycle';
 
 export class LeadSubmissionError extends Error {
   constructor(message, code = 'lead_submission_failed', details = null) {
@@ -40,6 +41,9 @@ export function normalizeLeadPayload(input = {}) {
 
   return {
     submissionId: input.submissionId || crypto.randomUUID(),
+    sessionId: input.sessionId || null,
+    lifecycleAction: ['start', 'activity', 'complete'].includes(input.lifecycleAction) ? input.lifecycleAction : 'complete',
+    calculatorStep: String(input.calculatorStep || '').trim(),
     formStartedAt: input.formStartedAt || null,
     submittedAt: new Date().toISOString(),
     website: String(input.website || ''),
@@ -68,7 +72,7 @@ export function normalizeLeadPayload(input = {}) {
 
 export function validateLeadPayload(payload) {
   const errors = {};
-  if (!payload.name || payload.name.length < 2) errors.name = 'נא להזין שם מלא.';
+  if (payload.lifecycleAction === 'complete' && (!payload.name || payload.name.length < 2)) errors.name = 'נא להזין שם מלא.';
   if (!isValidIsraeliPhone(payload.phone)) errors.phone = 'נא להזין מספר טלפון תקין.';
   if (payload.email && !/^\S+@\S+\.\S+$/.test(payload.email)) errors.email = 'כתובת האימייל אינה תקינה.';
   if (!payload.consent) errors.consent = 'יש לאשר את העברת הפרטים כדי שנוכל לחזור אליכם.';
@@ -93,7 +97,54 @@ export async function submitLead(input = {}) {
   return data;
 }
 
-function isValidIsraeliPhone(value = '') { return /^(?:9725\d{8}|05\d{8})$/.test(String(value).replace(/\D/g, '')); }
+export function getRoofCheckLifecycleSession() {
+  const stored = readJson(ROOF_CHECK_SESSION_KEY) || {};
+  const session = {
+    sessionId: isUuid(stored.sessionId) ? stored.sessionId : crypto.randomUUID(),
+    submissionId: isUuid(stored.submissionId) ? stored.submissionId : crypto.randomUUID(),
+    phone: String(stored.phone || ''),
+    consent: stored.consent === true,
+    verified: stored.verified === true,
+    leadId: stored.leadId || null,
+    leadNumber: stored.leadNumber || null,
+    status: stored.status || null
+  };
+  localStorage.setItem(ROOF_CHECK_SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+export function updateRoofCheckLifecycleSession(update = {}) {
+  const next = { ...getRoofCheckLifecycleSession(), ...update };
+  localStorage.setItem(ROOF_CHECK_SESSION_KEY, JSON.stringify(next));
+  return next;
+}
+
+export async function syncRoofCheckLead(input = {}) {
+  const session = getRoofCheckLifecycleSession();
+  const result = await submitLead({
+    ...input,
+    name: input.name || '',
+    phone: input.phone || session.phone,
+    consent: input.consent ?? session.consent,
+    sessionId: session.sessionId,
+    submissionId: session.submissionId,
+    lifecycleAction: input.lifecycleAction || (session.verified ? 'activity' : 'start'),
+    sourceType: input.sourceType || 'roof-check',
+    sourcePage: input.sourcePage || window.location.pathname
+  });
+  updateRoofCheckLifecycleSession({
+    phone: input.phone || session.phone,
+    consent: input.consent ?? session.consent,
+    verified: true,
+    leadId: result.leadId || session.leadId,
+    leadNumber: result.leadNumber || session.leadNumber,
+    status: result.status || session.status
+  });
+  return result;
+}
+
+export function isValidIsraeliPhone(value = '') { return /^(?:9725\d{8}|05\d{8})$/.test(String(value).replace(/\D/g, '')); }
 function inferSourceType() { if (/contact\.html/.test(window.location.pathname)) return 'contact-page'; if (/roof-check/.test(window.location.pathname)) return 'roof-check'; return 'site-form'; }
-function persistDevelopmentLead(payload) { const existing = readJson(DEVELOPMENT_LEADS_KEY) || []; localStorage.setItem(DEVELOPMENT_LEADS_KEY, JSON.stringify([{ ...payload, developmentOnly: true }, ...existing].slice(0, 100))); return Promise.resolve({ ok: true, leadId: payload.submissionId, developmentOnly: true }); }
+function persistDevelopmentLead(payload) { const existing = readJson(DEVELOPMENT_LEADS_KEY) || []; const index = payload.sessionId ? existing.findIndex((lead) => lead.sessionId === payload.sessionId) : -1; const lead = { ...(index >= 0 ? existing[index] : {}), ...payload, developmentOnly: true, leadId: index >= 0 ? existing[index].leadId : payload.submissionId, status: payload.lifecycleAction === 'complete' ? 'completed' : 'started' }; const next = index >= 0 ? existing.map((item, itemIndex) => itemIndex === index ? lead : item) : [lead, ...existing]; localStorage.setItem(DEVELOPMENT_LEADS_KEY, JSON.stringify(next.slice(0, 100))); return Promise.resolve({ ok: true, leadId: lead.leadId, status: lead.status, developmentOnly: true }); }
+function isUuid(value) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '')); }
 function readJson(key) { try { const value = localStorage.getItem(key); return value ? JSON.parse(value) : null; } catch { return null; } }

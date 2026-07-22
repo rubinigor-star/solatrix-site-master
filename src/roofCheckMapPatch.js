@@ -1,10 +1,14 @@
 import { buildFullPdfReport } from './pdfReport.js';
+import { calculateRoofCheckEconomics } from './roofCheckEconomics.js';
+import { buildRoofGeometry, polygonAreaM2 } from './lib/roofGeometry.js';
+import { getRoofMapProvider } from './lib/roofMapProvider.js';
 
 const PATCH_ID = 'solatrix-blue-point-roof-drawing-v4';
 const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
 const LOGO_SRC = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_298,h_194,al_c,q_90,enc_avif,quality_auto/Solatrix%20Logo%20Sait%20Main.png';
 const ADDRESS_KEY = 'solatrix_roof_check_address';
+const GEOMETRY_KEY = 'solatrix_roof_geometry_v1';
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
@@ -23,7 +27,7 @@ const CONFIG = {
   homeSystemLimitKw: 22.5,
   defaultSelfUseShare: 0.4,
   electricityGrowthRate: 0.04,
-  defaultPhone: '972547299727'
+  defaultPhone: '972542790088'
 };
 
 const patchState = {
@@ -36,10 +40,30 @@ const patchState = {
   addressResolved: false,
   resolvedAddress: ''
 };
+const mapProvider = getRoofMapProvider();
 
 function formatNumber(value) { return Math.round(Number(value) || 0).toLocaleString('he-IL'); }
 function formatMoney(value) { return '₪' + formatNumber(value); }
-function publishSurfaces() { window.__solatrixRoofSurfaces = patchState.surfaces.map((surface) => ({ ...surface })); }
+function publishSurfaces() {
+  const surfaces = patchState.surfaces.map((surface) => ({ ...surface, latlngs: (surface.latlngs || []).map((point) => ({ ...point })) }));
+  const geometry = buildRoofGeometry(surfaces, { address: getEnteredAddress(), provider: mapProvider.id });
+  window.__solatrixRoofSurfaces = surfaces;
+  window.__solatrixRoofGeometry = geometry;
+  window.__solatrixRoofCoordinates = geometry.centroid;
+  window.__solatrixRoofMapProvider = mapProvider.id;
+  try { localStorage.setItem(GEOMETRY_KEY, JSON.stringify({ surfaces, geometry })); } catch {}
+  window.dispatchEvent(new CustomEvent('solatrix:roof-geometry-changed', { detail: geometry }));
+}
+
+function restoreSurfaces() {
+  if (patchState.surfaces.length) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(GEOMETRY_KEY) || 'null');
+    if (!saved || saved.geometry?.address !== getEnteredAddress() || !Array.isArray(saved.surfaces)) return;
+    patchState.surfaces = saved.surfaces.filter((surface) => Array.isArray(surface?.latlngs) && surface.latlngs.length >= 3);
+    if (patchState.surfaces.length) publishSurfaces();
+  } catch {}
+}
 
 function getEnteredAddress() {
   const current = document.querySelector('[data-field="address"]')?.value?.trim();
@@ -57,6 +81,7 @@ function rememberAddress(event) {
     patchState.drawing = false;
     patchState.addressResolved = false;
     patchState.resolvedAddress = '';
+    try { localStorage.removeItem(GEOMETRY_KEY); } catch {}
     publishSurfaces();
   }
   try { localStorage.setItem(ADDRESS_KEY, nextAddress); } catch {}
@@ -110,16 +135,6 @@ function getAddressCenter() {
   if (address.includes('חיפה') || address.includes('haifa') || address.includes('חרמון')) return [32.7937, 34.9892];
   if (address.includes('באר') || address.includes('beer')) return [31.2529, 34.7915];
   return [32.7937, 34.9892];
-}
-
-function polygonAreaM2(latlngs) {
-  if (!latlngs || latlngs.length < 3) return 0;
-  const earth = 6378137;
-  const lat0 = latlngs.reduce((sum, p) => sum + p.lat, 0) / latlngs.length * Math.PI / 180;
-  const pts = latlngs.map((p) => ({ x: earth * p.lng * Math.PI / 180 * Math.cos(lat0), y: earth * p.lat * Math.PI / 180 }));
-  let sum = 0;
-  pts.forEach((p, i) => { const n = pts[(i + 1) % pts.length]; sum += p.x * n.y - n.x * p.y; });
-  return Math.abs(sum / 2);
 }
 
 function surfaceFromLatLngs(latlngs, source = 'manual') {
@@ -179,25 +194,12 @@ function calculatePatchReport() {
   const roofArea = patchState.surfaces.reduce((sum, surface) => sum + Number(surface.area || 0), 0) + draftArea;
   const usableArea = roofArea * CONFIG.usableRoofFactor;
   const potentialKw = usableArea / CONFIG.sqmPerKw;
-  const systemKw = Math.min(potentialKw, CONFIG.homeSystemLimitKw);
-  const annualProduction = systemKw * CONFIG.productionPerKw;
+  const isCommercial = window.__solatrixRoofCheckState?.roofType === 'commercial';
+  const systemKw = isCommercial ? potentialKw : Math.min(potentialKw, CONFIG.homeSystemLimitKw);
   const monthlyBill = Number(window.__solatrixRoofCheckState?.monthlyBill || document.querySelector('[data-field="monthlyBill"]')?.value || 850);
-  const annualConsumption = (monthlyBill * 12) / CONFIG.buyRate;
-  const selfConsumed = Math.min(annualProduction * CONFIG.defaultSelfUseShare, annualConsumption);
-  const exported = Math.max(annualProduction - selfConsumed, 0);
-  const annualSavings = selfConsumed * CONFIG.buyRate + exported * CONFIG.sellRate;
-  const effectiveTariff = annualSavings / Math.max(annualProduction, 1);
-  const selfUseShare = annualProduction ? selfConsumed / annualProduction * 100 : 0;
-  const exportShare = Math.max(0, 100 - selfUseShare);
-  const costBeforeVat = systemKw * CONFIG.installCostPerKw;
-  const costWithVat = costBeforeVat * (1 + CONFIG.vatRate);
-  const paybackBeforeVat = costBeforeVat / Math.max(annualSavings, 1);
-  const paybackWithVat = costWithVat / Math.max(annualSavings, 1);
-  let gross25 = 0;
-  for (let y = 0; y < 25; y += 1) gross25 += selfConsumed * CONFIG.buyRate * Math.pow(1 + CONFIG.electricityGrowthRate, y) + exported * CONFIG.sellRate;
-  const profit25WithVat = gross25 - costWithVat;
+  const economics = calculateRoofCheckEconomics({ systemSizeKwp: systemKw, isCommercial, monthlyBill });
   const panels = Math.max(Math.floor(systemKw / CONFIG.panelKw), 1);
-  return { roofArea, usableArea, roofPotentialKw: potentialKw, systemKw, annualProduction, annualSavings, effectiveTariff, selfUseShare, exportShare, cost: costBeforeVat, costBeforeVat, costWithVat, payback: paybackWithVat, paybackBeforeVat, paybackWithVat, gross25, profit25: profit25WithVat, profit25WithVat, panels };
+  return { ...economics, roofArea, usableArea, roofPotentialKw: potentialKw, systemKw, panels };
 }
 
 function updateMapText(message, success = false) {
@@ -406,7 +408,7 @@ async function autoDetectRoof(panel) {
       polygon = chooseBuilding(point, buildings);
     }
 
-    patchState.map.setView([point.lat, point.lng], 20);
+    patchState.map.setView([point.lat, point.lng], mapProvider.maxZoom);
     if (polygon.length < 3) {
       patchState.addressResolved = true;
       updateMapText('מצאנו את הכתובת, אבל לא נמצאו קווי מתאר אמינים של הבניין. סמנו את הגג ידנית.', false);
@@ -417,7 +419,7 @@ async function autoDetectRoof(panel) {
     patchState.addressResolved = true;
     publishSurfaces();
     drawSurfaces();
-    patchState.map.fitBounds(window.L.latLngBounds(polygon.map((p) => [p.lat, p.lng])).pad(0.35), { maxZoom: 20 });
+    patchState.map.fitBounds(window.L.latLngBounds(polygon.map((p) => [p.lat, p.lng])).pad(0.35), { maxZoom: mapProvider.maxZoom });
     setStartButtonMode(true);
     updateMapText('זיהינו וסימנו אוטומטית את שטח הבניין. בדקו שהמסגרת הכחולה נכונה; לתיקון לחצו “תיקון ידני”.', true);
   } catch (error) {
@@ -455,6 +457,7 @@ async function installMapIntoOriginalScreen() {
   const panel = document.querySelector('.mapPanel.interactiveMap');
   if (!panel || panel.dataset.govmapInstalled === 'true') return;
   injectStyles();
+  restoreSurfaces();
   panel.dataset.govmapInstalled = 'true';
   panel.classList.add('solatrixMapInjected');
   panel.removeAttribute('data-action');
@@ -464,8 +467,8 @@ async function installMapIntoOriginalScreen() {
   if (patchState.map) {
     try { patchState.map.remove(); } catch {}
   }
-  patchState.map = L.map('solatrix-real-roof-map', { zoomControl: true, attributionControl: true, maxZoom: 21, doubleClickZoom: false }).setView(center, 18);
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, attribution: 'Imagery © Esri' }).addTo(patchState.map);
+  patchState.map = L.map('solatrix-real-roof-map', { zoomControl: true, attributionControl: true, maxZoom: mapProvider.maxZoom, doubleClickZoom: false }).setView(center, 18);
+  L.tileLayer(mapProvider.tileUrl, { maxZoom: mapProvider.maxZoom, attribution: mapProvider.attribution }).addTo(patchState.map);
   patchState.layerGroup = L.layerGroup().addTo(patchState.map);
   patchState.map.on('click', (event) => {
     if (!patchState.drawing) return;
@@ -493,7 +496,7 @@ async function installMapIntoOriginalScreen() {
   drawSurfaces();
   if (patchState.surfaces.length) {
     const allPoints = patchState.surfaces.flatMap((surface) => surface.latlngs || []);
-    if (allPoints.length) patchState.map.fitBounds(L.latLngBounds(allPoints.map((p) => [p.lat, p.lng])).pad(0.3), { maxZoom: 20 });
+    if (allPoints.length) patchState.map.fitBounds(L.latLngBounds(allPoints.map((p) => [p.lat, p.lng])).pad(0.3), { maxZoom: mapProvider.maxZoom });
     setStartButtonMode(patchState.surfaces.some((surface) => surface.source === 'auto'));
     updateMapText('הסימון הקודם נטען. בדקו את המסגרת הכחולה והמשיכו.', true);
   } else {

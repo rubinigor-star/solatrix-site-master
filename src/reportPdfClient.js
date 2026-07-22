@@ -3,13 +3,16 @@ import coverHeroUrl from './assets/roof-check-report/roof-check-cover-hero.webp'
 import installersUrl from './assets/roof-check-report/roof-check-installers.webp';
 import familyUrl from './assets/roof-check-report/roof-check-family.webp';
 import { calculateCommercialEconomics, calculateResidentialEconomics, validateEconomics } from './roofCheckEconomics.js';
+import { coordinateText } from './lib/roofGeometry.js';
 
 const LOGO_URL = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_596,h_388,al_c,q_100/Solatrix%20Logo%20Sait%20Main.png';
 const FONT_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/heebo/Heebo%5Bwght%5D.ttf';
+const SOLATRIX_WHATSAPP = '054-279-0088';
 const C = { bg:[252,250,245], navy:[7,31,50], blue:[22,85,128], orange:[247,163,24], grey:[78,91,101], border:[218,214,205], white:[255,255,255], pale:[245,247,248], green:[34,166,91], grid:[224,228,231] };
 
 export async function createRoofCheckPdf({ customer = {}, reportData = {} } = {}) {
-  const roof = reportData.roofData || {};
+  customer = { ...customer, name: safePdfText(customer.name, 160), phone: safePdfText(customer.phone, 40), email: safePdfText(customer.email, 320) };
+  const roof = { ...(reportData.roofData || {}), address: safePdfText(reportData.roofData?.address, 500) };
   const values = buildValues(reportData.calculationModel || {}, reportData.calculation || {}, roof);
   const pdf = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4', compress:true, putOnlyUsedFonts:true });
   await installFonts(pdf);
@@ -18,7 +21,7 @@ export async function createRoofCheckPdf({ customer = {}, reportData = {} } = {}
   ]);
   const generatedAt = new Date().toLocaleString('he-IL', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
   page1(pdf, { customer, roof, values, generatedAt, logo, cover:coverImage });
-  pdf.addPage(); page2(pdf, { customer, values, logo, installers });
+  pdf.addPage(); page2(pdf, { customer, roof, values, logo, installers });
   pdf.addPage(); page3(pdf, { values, logo });
   pdf.addPage(); page4(pdf, { family });
   pdf.setProperties({ title:'Solatrix Roof Check', subject:'Professional solar roof feasibility report', author:'Solatrix Energy' });
@@ -38,7 +41,14 @@ function buildValues(model, calculation, roof) {
   const panels = num(model.panels, find('פאנלים'));
   const size = num(model.systemSizeKwp ?? model.systemSize ?? model.dcSizeKwp, null, panels ? panels * 0.63 : num(model.annualProduction, find('ייצור שנתי')) / 1650);
   const isCommercial = model.isCommercial === true || roof.roofType === 'commercial' || size > 22.5;
-  const economics = isCommercial ? calculateCommercialEconomics({ systemSizeKwp:size }) : calculateResidentialEconomics({ systemSizeKwp:size });
+  const economicsInput = {
+    systemSizeKwp: size,
+    monthlyBill: num(model.monthlyBill, roof.monthlyBill),
+    urbanEligible: model.urbanEligible === true || roof.urbanEligible === true
+  };
+  const economics = isCommercial
+    ? calculateCommercialEconomics(economicsInput)
+    : calculateResidentialEconomics(economicsInput);
   return {
     ...economics,
     roofArea, usableArea, panels: panels || Math.max(0, Math.round(size / 0.63)),
@@ -82,12 +92,12 @@ function page2(pdf, c) {
   rows.forEach((r,i) => resultRow(pdf, 18, 140 + i * 13.5, 102, 11.5, r[0], r[1]));
   projectFact(pdf, 126, 140, 66, 23, 'סוג מערכת', c.values.isCommercial ? 'מסחרית' : 'ביתית', 'home');
   projectFact(pdf, 126, 168, 66, 23, 'חשבון חודשי', money(c.values.monthlyBill || 0), 'bill', true);
-  projectFact(pdf, 126, 196, 66, 23, 'וואטסאפ', c.customer.phone || '—', 'whatsapp', true);
-  projectFact(pdf, 126, 224, 66, 23, 'תקינות חישוב', c.values.validation.valid ? 'נבדק' : 'דורש בדיקה', 'check');
+  projectFact(pdf, 126, 196, 66, 23, 'וואטסאפ', SOLATRIX_WHATSAPP, 'whatsapp', true);
+  projectFact(pdf, 126, 224, 66, 23, 'קואורדינטות', coordinateText(c.roof.geometry || { centroid: c.roof.coordinates }) || '—', 'pin', true);
   note(pdf, 18, 251, 174, 18, 'מודל פיננסי', c.values.isCommercial
     ? 'כל הייצור מחושב לפי ערך של 0.39 ₪ לקוט״ש.'
     : '35% מהייצור מחושב כחיסכון עצמי לפי 0.64 ₪ לקוט״ש, ו־65% כמכירה לרשת לפי 0.48 ₪ לקוט״ש.');
-  note(pdf, 18, 273, 174, 10, 'הערה', 'המחיר הוא אומדן ראשוני להתקנה סטנדרטית וללא עבודות חריגות.');
+  note(pdf, 18, 269, 174, 14, 'הערה', 'המחיר הוא אומדן ראשוני להתקנה סטנדרטית וללא עבודות חריגות.');
 }
 
 function page3(pdf, c) {
@@ -155,17 +165,18 @@ function monthlyChart(pdf,x,y,w,h,months){const max=Math.max(...months.map(m=>m.
 function cashflowChart(pdf,x,y,w,h,points,payback){const vals=points.map(p=>p.value),min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,1),px=yr=>x+(yr/25)*w,py=v=>y+h-((v-min)/range)*h;pdf.setDrawColor(...C.grid);pdf.line(x,py(0),x+w,py(0));[0,5,10,15,20,25].forEach(yr=>{pdf.line(px(yr),y,px(yr),y+h);ltr(pdf,String(yr),px(yr),y+h+5,2.4,'normal',C.grey,'center');});pdf.setDrawColor(...C.blue);pdf.setLineWidth(1);for(let i=1;i<points.length;i++)pdf.line(px(points[i-1].year),py(points[i-1].value),px(points[i].year),py(points[i].value));pdf.setFillColor(...C.orange);pdf.circle(px(Math.min(payback,25)),py(0),2.1,'F');}
 function summaryBand(pdf,x,y,w,h,p,v){round(pdf,x,y,w,h,C.navy,C.navy,5);rtlCenter(pdf,'סיכום פיננסי ל־25 שנה',x+w/2,y+8.5,4.3,'bold',C.orange);const items=[['הכנסה מצטברת',money(p.totalIncome25)],['השקעה',money(v.costWithVat)],['רווח נקי',money(p.netProfit25)],['ROI',`${Math.round(p.roi25)}%`]];const col=w/4;items.forEach((it,i)=>{const cx=x+col*i+col/2;if(i>0){pdf.setDrawColor(65,86,103);pdf.setLineWidth(.25);pdf.line(x+col*i,y+13,x+col*i,y+h-5);}ltr(pdf,it[1],cx,y+21,4.3,'bold',C.white,'center');pdf.setDrawColor(...C.orange);pdf.setLineWidth(.45);pdf.line(cx-13,y+23,cx+13,y+23);if(it[0]==='ROI')ltr(pdf,it[0],cx,y+30,2.9,'bold',[225,233,239],'center');else rtlCenter(pdf,it[0],cx,y+30,2.9,'bold',[225,233,239]);});}
 function step(pdf,x,y,w,h,n,titleText,text,icon){card(pdf,x,y,w,h,5);pdf.setFillColor(...C.navy);pdf.circle(x+w-10,y+h/2,6,'F');ltr(pdf,String(n),x+w-10,y+h/2+1.8,5,'bold',C.white,'center');iconDraw(pdf,icon,x+11,y+h/2);rtl(pdf,titleText,x+w-22,y+10,5,'bold',C.navy);rtl(pdf,text,x+w-22,y+18,3.45,'normal',C.grey,w-45);}
-function whatsappBand(pdf,x,y,w,h){round(pdf,x,y,w,h,C.navy,C.navy,5);iconDraw(pdf,'whatsapp',x+11,y+h/2,C.green);rtl(pdf,'דוח מקצועי ומוכן לשיתוף',x+w-8,y+8,4.8,'bold',C.white);rtl(pdf,'הקובץ כולל את כל הנתונים, ההנחות והתחזית הפיננסית.',x+w-8,y+14.5,3.45,'normal',[230,237,242],w-27);}
+function whatsappBand(pdf,x,y,w,h){round(pdf,x,y,w,h,C.navy,C.navy,5);iconDraw(pdf,'whatsapp',x+11,y+h/2,C.green);rtl(pdf,'דוח מקצועי ומוכן לשיתוף',x+w-8,y+8,4.8,'bold',C.white);rtl(pdf,'הקובץ כולל את כל הנתונים, ההנחות והתחזית הפיננסית.',x+w-8,y+14.5,3.45,'normal',[230,237,242],w-66);ltr(pdf,SOLATRIX_WHATSAPP,x+25,y+14.5,3.45,'bold',[230,237,242],'left');}
 function contactBand(pdf,x,y,w,h){round(pdf,x,y,w,h,C.navy,C.navy,5);ltr(pdf,'Solatrix Energy',x+w-8,y+8,4.3,'bold',C.orange,'right');ltr(pdf,'solatrix.energy',x+8,y+13,3.6,'bold',C.orange,'left');}
 function card(pdf,x,y,w,h,r=5){round(pdf,x,y,w,h,C.white,C.border,r);}
 function round(pdf,x,y,w,h,fill,stroke,r){pdf.setFillColor(...fill);pdf.setDrawColor(...stroke);pdf.setLineWidth(.25);pdf.roundedRect(x,y,w,h,r,r,'FD');}
 function iconDraw(pdf,type,cx,cy,color=C.orange){pdf.setDrawColor(...color);pdf.setTextColor(...color);pdf.setLineWidth(.6);if(type==='clock'){pdf.circle(cx,cy,4,'S');pdf.line(cx,cy,cx,cy-2.5);pdf.line(cx,cy,cx+2,cy+1);}else if(type==='tag'){pdf.rect(cx-3,cy-3,6,6,'S');pdf.circle(cx+1.5,cy-1.5,.5,'S');}else if(type==='pin'){pdf.circle(cx,cy-1,3,'S');pdf.line(cx-2,cy+1,cx,cy+5);pdf.line(cx+2,cy+1,cx,cy+5);}else if(type==='user'){pdf.circle(cx,cy-2,2,'S');pdf.line(cx-4,cy+4,cx-2.5,cy+1.5);pdf.line(cx-2.5,cy+1.5,cx+2.5,cy+1.5);pdf.line(cx+2.5,cy+1.5,cx+4,cy+4);}else if(type==='calendar'){pdf.rect(cx-4,cy-3,8,7,'S');pdf.line(cx-4,cy-1,cx+4,cy-1);}else if(type==='area'){pdf.rect(cx-4,cy-4,8,8,'S');pdf.line(cx-4,cy,cx+4,cy);pdf.line(cx,cy-4,cx,cy+4);}else if(type==='home'){pdf.line(cx-4,cy,cx,cy-4);pdf.line(cx,cy-4,cx+4,cy);pdf.rect(cx-3,cy,6,4,'S');}else if(type==='bill'||type==='doc'){pdf.rect(cx-3,cy-4,6,8,'S');pdf.line(cx-2,cy-1,cx+2,cy-1);}else if(type==='whatsapp'){pdf.circle(cx,cy,4,'S');ltr(pdf,'✓',cx,cy+1.5,4,'bold',color,'center');}else if(type==='users'){pdf.circle(cx-2,cy-2,1.5,'S');pdf.circle(cx+2,cy-2,1.5,'S');pdf.line(cx-4,cy+3,cx+4,cy+3);}else if(type==='worker'){pdf.circle(cx,cy-2,2,'S');pdf.line(cx-4,cy+4,cx-2.5,cy+1.5);pdf.line(cx-2.5,cy+1.5,cx+2.5,cy+1.5);pdf.line(cx+2.5,cy+1.5,cx+4,cy+4);}else if(type==='check'){pdf.rect(cx-3,cy-4,6,8,'S');ltr(pdf,'✓',cx,cy+1.5,4,'bold',color,'center');}else{ltr(pdf,type==='sun'?'☀':'⚡',cx,cy+2,7,'bold',color,'center');}}
-function rtl(pdf,text,x,y,size,style='normal',color=C.navy,maxWidth){pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(true);const lines=maxWidth?pdf.splitTextToSize(String(text??''),maxWidth):String(text??'');pdf.text(lines,x,y,{align:'right'});pdf.setR2L(false);}
-function rtlCenter(pdf,text,x,y,size,style='normal',color=C.navy){pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(true);pdf.text(String(text??''),x,y,{align:'center'});pdf.setR2L(false);}
+function rtl(pdf,text,x,y,size,style='normal',color=C.navy,maxWidth){pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(true);const normalized=fixRtlParentheses(String(text??''));const lines=maxWidth?pdf.splitTextToSize(normalized,maxWidth):normalized;pdf.text(lines,x,y,{align:'right'});pdf.setR2L(false);}
+function rtlCenter(pdf,text,x,y,size,style='normal',color=C.navy){pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(true);pdf.text(fixRtlParentheses(String(text??'')),x,y,{align:'center'});pdf.setR2L(false);}
 function rtlMixed(pdf,text,x,y,size,style='normal',color=C.navy){const s=String(text??'');const match=s.match(/^(.*?)(\d[\d\-\/.]*)$/);if(match&&match[1].trim()){rtl(pdf,match[1].trim(),x,y,size,style,color);const hebrewWidth=textWidth(pdf,match[1].trim(),size,style);ltr(pdf,match[2],x-hebrewWidth-1.2,y,size,style,color,'right');}else rtl(pdf,s,x,y,size,style,color);}
 function ltr(pdf,text,x,y,size,style='normal',color=C.navy,align='left'){pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));pdf.setTextColor(...color);pdf.setR2L(false);pdf.text(String(text??''),x,y,{align});}
 function textWidth(pdf,text,size,style='normal'){pdf.setFont('Heebo',style);pdf.setFontSize(mm(size));return pdf.getTextWidth(String(text??''));}
 function hasHebrew(text){return /[\u0590-\u05FF]/.test(String(text||''));}
+function fixRtlParentheses(value){return /[\u0590-\u05FF]/.test(value)&&/[()]/.test(value)?value.replace(/\(/g,'\uFFF0').replace(/\)/g,'(').replace(/\uFFF0/g,')'):value;}
 function mm(v){return v*2.8346457;}
 async function installFonts(pdf){const b=await fetchBase64(FONT_URL);pdf.addFileToVFS('Heebo-Regular.ttf',b);pdf.addFileToVFS('Heebo-Bold.ttf',b);pdf.addFont('Heebo-Regular.ttf','Heebo','normal');pdf.addFont('Heebo-Bold.ttf','Heebo','bold');}
 async function fetchBase64(url){const res=await fetch(url,{mode:'cors',cache:'force-cache'});if(!res.ok)throw new Error(`Font request failed: ${res.status}`);const bytes=new Uint8Array(await res.arrayBuffer());let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(s);}
@@ -176,3 +187,4 @@ function parseNumeric(v){if(typeof v==='number')return v;const s=String(v??'').r
 function number(v){return Math.round(Number(v)||0).toLocaleString('he-IL');}
 function money(v){return `₪${number(v)}`;}
 function one(v){return (Number(v)||0).toFixed(1);}
+function safePdfText(value,maxLength){return String(value??'').replace(/[\u0000-\u001F\u007F]/g,' ').slice(0,maxLength);}

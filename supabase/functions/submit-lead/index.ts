@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { lifecycleEventType, nextLeadStatus, normalizeLifecycleAction } from '../_shared/leadLifecycle.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,14 +8,22 @@ const corsHeaders = {
 };
 const allowedPropertyTypes = new Set(['בית פרטי', 'עסק', 'חקלאי', 'אחר', 'private-home', 'business', 'agriculture', 'other']);
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
+const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
+const MAX_NEW_LEADS_PER_IP_WINDOW = 12;
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ ok: false, code: 'method_not_allowed', message: 'Method not allowed.' }, 405);
 
   try {
-    const payload = await request.json();
-    const validation = validatePayload(payload);
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) {
+      return json({ ok: false, code: 'payload_too_large', message: 'Request payload is too large.' }, 413);
+    }
+    let payload;
+    try { payload = JSON.parse(rawBody); } catch { return json({ ok: false, code: 'invalid_json', message: 'Invalid JSON.' }, 400); }
+    const lifecycleAction = normalizeLifecycleAction(payload.lifecycleAction);
+    const validation = validatePayload(payload, lifecycleAction);
     if (!validation.ok) return json({ ok: false, code: 'validation_error', message: 'Invalid lead details.', details: validation.errors }, 400);
     if (String(payload.website || '').trim()) return json({ ok: true, ignored: true });
 
@@ -22,31 +31,28 @@ Deno.serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
+    const now = new Date().toISOString();
     const normalizedPhone = normalizePhone(payload.phone);
+    const sessionId = safeUuid(payload.sessionId);
     const attribution = payload.attribution || {};
     const lastTouch = attribution.lastTouch || {};
+    const existingLead = await findExistingLead(supabase, sessionId, normalizedPhone, lifecycleAction);
+    const clientIpHash = await hashValue(getClientIp(request));
+    if (!existingLead && !(await isWithinLeadRateLimit(supabase, clientIpHash))) {
+      return json({ ok: false, code: 'rate_limited', message: 'Too many requests. Please try again later.' }, 429);
+    }
     const metadata = {
+      ...(existingLead?.metadata || {}),
       ...(payload.metadata || {}),
       locale: payload.locale || 'he',
       firstTouch: attribution.firstTouch || null,
-      clientIpHash: await hashValue(getClientIp(request)),
-      submittedAt: payload.submittedAt || new Date().toISOString()
+      clientIpHash,
+      submittedAt: payload.submittedAt || now
     };
-
-    const duplicateSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: existingLead, error: existingError } = await supabase
-      .from('leads')
-      .select('id, lead_number, duplicate_count, status')
-      .eq('phone_normalized', normalizedPhone)
-      .gte('created_at', duplicateSince)
-      .is('archived_at', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (existingError) throw existingError;
 
     const leadValues = {
       submission_id: safeUuid(payload.submissionId),
+      session_id: sessionId,
       name: cleanText(payload.name, 160),
       phone: cleanText(payload.phone, 40),
       phone_normalized: normalizedPhone,
@@ -66,37 +72,80 @@ Deno.serve(async (request) => {
       utm_term: cleanText(lastTouch.utmTerm || '', 255),
       gclid: cleanText(lastTouch.gclid || '', 255),
       fbclid: cleanText(lastTouch.fbclid || '', 255),
-      consent_at: new Date().toISOString(),
-      last_submitted_at: new Date().toISOString(),
+      consent_at: existingLead?.consent_at || now,
+      last_submitted_at: lifecycleAction === 'complete' ? now : existingLead?.last_submitted_at || now,
+      last_activity_at: now,
+      calculator_step: cleanText(payload.calculatorStep, 120),
       metadata
     };
 
     let lead;
-    let duplicate = false;
+    let duplicate = Boolean(existingLead);
+    let eventType = 'lead_started';
     if (existingLead) {
-      duplicate = true;
-      const { data, error } = await supabase.from('leads').update({
+      const nextStatus = nextLeadStatus(existingLead.status, lifecycleAction);
+      const updateValues = compactValues({
         ...leadValues,
         submission_id: leadValues.submission_id || undefined,
-        duplicate_count: Number(existingLead.duplicate_count || 0) + 1
-      }).eq('id', existingLead.id).select('*').single();
+        session_id: sessionId || existingLead.session_id || undefined,
+        status: nextStatus,
+        completed_at: lifecycleAction === 'complete' ? now : existingLead.completed_at,
+        abandoned_at: nextStatus === 'started' ? null : existingLead.abandoned_at,
+        duplicate_count: lifecycleAction === 'complete' && existingLead.status === 'completed'
+          ? Number(existingLead.duplicate_count || 0) + 1
+          : Number(existingLead.duplicate_count || 0)
+      });
+      if (nextStatus === 'started') updateValues.abandoned_at = null;
+      const { data, error } = await supabase.from('leads').update(updateValues).eq('id', existingLead.id).select('*').single();
       if (error) throw error;
       lead = data;
+      eventType = lifecycleEventType(existingLead.status, nextStatus, lifecycleAction);
     } else {
-      const { data, error } = await supabase.from('leads').insert({ ...leadValues, status: 'new' }).select('*').single();
-      if (error) throw error;
-      lead = data;
+      const status = lifecycleAction === 'complete' ? 'completed' : 'started';
+      const { data, error } = await supabase.from('leads').insert({
+        ...leadValues,
+        name: leadValues.name || 'ללא שם',
+        status,
+        completed_at: status === 'completed' ? now : null
+      }).select('*').single();
+      if (error?.code === '23505' && sessionId) {
+        const concurrentLead = await findExistingLead(supabase, sessionId, normalizedPhone, lifecycleAction);
+        if (!concurrentLead) throw error;
+        const recoveredStatus = nextLeadStatus(concurrentLead.status, lifecycleAction);
+        const { data: recovered, error: recoveryError } = await supabase.from('leads').update(compactValues({
+          ...leadValues,
+          status: recoveredStatus,
+          completed_at: lifecycleAction === 'complete' ? now : concurrentLead.completed_at
+        })).eq('id', concurrentLead.id).select('*').single();
+        if (recoveryError) throw recoveryError;
+        lead = recovered;
+        duplicate = true;
+        eventType = lifecycleEventType(concurrentLead.status, recoveredStatus, lifecycleAction);
+      } else {
+        if (error) throw error;
+        lead = data;
+        eventType = lifecycleEventType(null, status, lifecycleAction, true);
+      }
     }
 
-    await supabase.from('lead_events').insert({
+    const { error: eventError } = await supabase.from('lead_events').insert({
       lead_id: lead.id,
-      event_type: duplicate ? 'lead_resubmitted' : 'lead_created',
-      payload: { duplicate, sourceType: lead.source_type, sourcePage: lead.source_page, submissionId: payload.submissionId || null }
+      event_type: eventType,
+      payload: {
+        duplicate,
+        lifecycleAction,
+        calculatorStep: lead.calculator_step,
+        sourceType: lead.source_type,
+        sourcePage: lead.source_page,
+        submissionId: payload.submissionId || null,
+        sessionId: lead.session_id
+      }
     });
+    if (eventError) throw eventError;
 
     let reportId = null;
     let storagePath = null;
-    if (payload.reportData && typeof payload.reportData === 'object') {
+    if (lifecycleAction === 'complete' && payload.reportData && typeof payload.reportData === 'object') {
       const reportData = payload.reportData;
       const reportFile = payload.reportFile && typeof payload.reportFile === 'object' ? payload.reportFile : null;
       let originalFilename = null;
@@ -136,24 +185,80 @@ Deno.serve(async (request) => {
       reportId = report.id;
     }
 
-    await Promise.allSettled([sendLeadEmail(lead, duplicate), appendLeadToGoogleSheets(lead, duplicate)]);
-    return json({ ok: true, leadId: lead.id, leadNumber: lead.lead_number, duplicate, reportId, storagePath });
+    if (lifecycleAction === 'complete') {
+      await Promise.allSettled([sendLeadEmail(lead, duplicate), appendLeadToGoogleSheets(lead, duplicate)]);
+    }
+    return json({
+      ok: true,
+      leadId: lead.id,
+      leadNumber: lead.lead_number,
+      status: lead.status,
+      calculatorStep: lead.calculator_step,
+      duplicate,
+      reportId,
+      storagePath
+    });
   } catch (error) {
     console.error('submit-lead failed', error);
     return json({ ok: false, code: 'internal_error', message: 'Lead submission failed.' }, 500);
   }
 });
 
-function validatePayload(payload: Record<string, unknown>) {
+function validatePayload(payload: Record<string, unknown>, lifecycleAction: string) {
   const errors: Record<string, string> = {};
   const name = String(payload?.name || '').trim();
   const phone = String(payload?.phone || '').trim();
   const email = String(payload?.email || '').trim();
-  if (name.length < 2 || name.length > 160) errors.name = 'invalid_name';
+  if ((lifecycleAction === 'complete' && name.length < 2) || name.length > 160) errors.name = 'invalid_name';
   if (!/^(?:9725\d{8}|05\d{8})$/.test(phone.replace(/\D/g, ''))) errors.phone = 'invalid_phone';
   if (email && !/^\S+@\S+\.\S+$/.test(email)) errors.email = 'invalid_email';
   if (payload?.consent !== true) errors.consent = 'consent_required';
   return { ok: Object.keys(errors).length === 0, errors };
+}
+
+async function findExistingLead(supabase: ReturnType<typeof createClient>, sessionId: string | null, normalizedPhone: string, lifecycleAction: string) {
+  const fields = 'id, lead_number, duplicate_count, status, session_id, last_submitted_at, completed_at, abandoned_at, consent_at, metadata';
+  if (sessionId) {
+    const { data, error } = await supabase
+      .from('leads')
+      .select(fields)
+      .eq('session_id', sessionId)
+      .is('archived_at', null)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data;
+    return null;
+  }
+
+  const duplicateSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  let query = supabase
+    .from('leads')
+    .select(fields)
+    .eq('phone_normalized', normalizedPhone)
+    .gte('created_at', duplicateSince)
+    .is('archived_at', null);
+  if (lifecycleAction !== 'complete') query = query.in('status', ['started', 'abandoned']);
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+function compactValues(values: Record<string, unknown>) {
+  return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined && value !== null));
+}
+
+async function isWithinLeadRateLimit(supabase: ReturnType<typeof createClient>, clientIpHash: string) {
+  const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .eq('metadata->>clientIpHash', clientIpHash)
+    .gte('created_at', since);
+  if (error) throw error;
+  return Number(count || 0) < MAX_NEW_LEADS_PER_IP_WINDOW;
 }
 
 function decodeBase64Pdf(value: unknown) {

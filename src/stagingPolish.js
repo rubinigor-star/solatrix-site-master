@@ -1,4 +1,4 @@
-import { clearLeads, exportLeadsCsv, seedDemoLeads } from './leadsStore.js';
+import { clearLeads, exportLeadsCsv } from './leadsStore.js';
 import { LeadSubmissionError, submitLead } from './lib/leadApi.js';
 import { formatPublicLeadReference } from './lib/publicReference.js';
 
@@ -181,13 +181,11 @@ function enhanceCrm() {
   adminCard.dataset.stagePolished = 'true';
   adminCard.querySelector('.eyebrow')?.insertAdjacentHTML('afterend', `
     <div class="adminActions">
-      <button class="ghostBtn" data-stage-action="seed">Demo leads</button>
       <button class="ghostBtn" data-stage-action="export">Export CSV</button>
       <button class="ghostBtn danger" data-stage-action="clear">Clear mock</button>
       <a class="ghostBtn" href="../admin.html">CRM full page</a>
     </div>
   `);
-  adminCard.querySelector('[data-stage-action="seed"]')?.addEventListener('click', () => { seedDemoLeads(); location.reload(); });
   adminCard.querySelector('[data-stage-action="clear"]')?.addEventListener('click', () => { clearLeads(); location.reload(); });
   adminCard.querySelector('[data-stage-action="export"]')?.addEventListener('click', downloadCsv);
   adminCard.querySelectorAll('.leadsTable tbody tr').forEach((row) => row.setAttribute('tabindex', '0'));
@@ -241,7 +239,7 @@ function buildWhatsappFallbackUrl(reference) {
     reference ? `מספר פנייה: ${reference}` : '',
     'אשמח לאישור שהבקשה התקבלה.'
   ].filter(Boolean).join('\n');
-  return `https://wa.me/972547299727?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/972542790088?text=${encodeURIComponent(message)}`;
 }
 
 function normalizePhone(value) {

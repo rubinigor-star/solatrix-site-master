@@ -1,3 +1,5 @@
+import { ROOF_CHECK_DEFAULTS, calculateRoofCheckEconomics } from './roofCheckEconomics.js';
+
 const ROOF_TYPE_KEY = 'solatrix_roof_type';
 const MONTHLY_BILL_KEY = 'solatrix_monthly_bill';
 const ADDRESS_KEY = 'solatrix_roof_check_address';
@@ -7,22 +9,11 @@ const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
 const WIKIDATA_API = 'https://www.wikidata.org/w/api.php';
 
 const CONFIG = {
-  productionPerKw: 1650,
-  buyRate: 0.64,
-  homeExportRate: 0.48,
-  commercialExportRate: 0.40,
-  urbanBonusRate: 0.06,
-  urbanBonusYears: 10,
-  contractYears: 25,
   urbanPopulationThreshold: 50000,
-  installCostPerKw: 2900,
   sqmPerKw: 7,
   panelKw: 0.63,
   usableRoofFactor: 0.82,
-  vatRate: 0.18,
-  homeSystemLimitKw: 22.5,
-  defaultSelfUseShare: 0.4,
-  electricityGrowthRate: 0.04
+  homeSystemLimitKw: ROOF_CHECK_DEFAULTS.residentialMaxKwp
 };
 
 const FALLBACK_URBAN_LOCALITIES = new Set([
@@ -319,38 +310,16 @@ function calculate() {
   const roofPotentialKw = usableArea / CONFIG.sqmPerKw;
   const isCommercial = roofType === 'commercial';
   const systemKw = isCommercial ? roofPotentialKw : Math.min(roofPotentialKw, CONFIG.homeSystemLimitKw);
-  const annualProduction = systemKw * CONFIG.productionPerKw;
-  const annualConsumption = isCommercial ? 0 : (monthlyBill * 12) / CONFIG.buyRate;
-  const selfConsumed = isCommercial ? 0 : Math.min(annualProduction * CONFIG.defaultSelfUseShare, annualConsumption);
-  const exported = Math.max(annualProduction - selfConsumed, 0);
-  const baseExportRate = isCommercial ? CONFIG.commercialExportRate : CONFIG.homeExportRate;
-  const annualRevenueByYear = [];
-
-  for (let year = 0; year < CONFIG.contractYears; year += 1) {
-    const urbanBonus = urban.eligible && year < CONFIG.urbanBonusYears ? CONFIG.urbanBonusRate : 0;
-    if (isCommercial) {
-      annualRevenueByYear.push(annualProduction * (baseExportRate + urbanBonus));
-    } else {
-      const selfUseValue = selfConsumed * CONFIG.buyRate * Math.pow(1 + CONFIG.electricityGrowthRate, year);
-      const exportValue = exported * (baseExportRate + urbanBonus);
-      annualRevenueByYear.push(selfUseValue + exportValue);
-    }
-  }
-
-  const annualSavings = annualRevenueByYear[0] || 0;
-  const effectiveTariff = annualSavings / Math.max(annualProduction, 1);
-  const costBeforeVat = systemKw * CONFIG.installCostPerKw;
-  const costWithVat = costBeforeVat * (1 + CONFIG.vatRate);
-  const paybackBeforeVat = costBeforeVat / Math.max(annualSavings, 1);
-  const paybackWithVat = costWithVat / Math.max(annualSavings, 1);
-  const gross25 = annualRevenueByYear.reduce((sum, value) => sum + value, 0);
-  const profit25WithVat = gross25 - costWithVat;
+  const economics = calculateRoofCheckEconomics({
+    systemSizeKwp: systemKw,
+    isCommercial,
+    monthlyBill,
+    urbanEligible: urban.eligible
+  });
   const panels = Math.max(Math.floor(systemKw / CONFIG.panelKw), 1);
-  const urbanBonusTotal = urban.eligible
-    ? exported * CONFIG.urbanBonusRate * Math.min(CONFIG.urbanBonusYears, CONFIG.contractYears)
-    : 0;
 
   const report = {
+    ...economics,
     roofType,
     isCommercial,
     address,
@@ -359,20 +328,6 @@ function calculate() {
     usableArea,
     roofPotentialKw,
     systemKw,
-    annualProduction,
-    annualConsumption,
-    selfConsumed,
-    exported,
-    baseExportRate,
-    annualSavings,
-    annualRevenueByYear,
-    effectiveTariff,
-    costBeforeVat,
-    costWithVat,
-    paybackBeforeVat,
-    paybackWithVat,
-    gross25,
-    profit25WithVat,
     panels,
     limitApplied: !isCommercial && roofPotentialKw > CONFIG.homeSystemLimitKw,
     urbanEligible: urban.eligible,
@@ -381,11 +336,13 @@ function calculate() {
     urbanPopulation: urbanDetection.population,
     urbanDetectionStatus: urbanDetection.status,
     urbanDetectionSource: urbanDetection.source,
-    urbanBonusRate: CONFIG.urbanBonusRate,
-    urbanBonusYears: CONFIG.urbanBonusYears,
-    urbanBonusTotal,
-    tariffContractYears: CONFIG.contractYears,
-    consumerTariffGrowthRate: isCommercial ? 0 : CONFIG.electricityGrowthRate
+    baseExportRate: isCommercial
+      ? ROOF_CHECK_DEFAULTS.commercialTariffPerKwh
+      : ROOF_CHECK_DEFAULTS.gridExportTariffPerKwh,
+    urbanBonusRate: ROOF_CHECK_DEFAULTS.urbanBonusRatePerKwh,
+    urbanBonusYears: ROOF_CHECK_DEFAULTS.urbanBonusYears,
+    tariffContractYears: ROOF_CHECK_DEFAULTS.projectionYears,
+    consumerTariffGrowthRate: isCommercial ? 0 : ROOF_CHECK_DEFAULTS.annualElectricityPriceGrowth
   };
 
   window.__solatrixRoofCalculation = report;
