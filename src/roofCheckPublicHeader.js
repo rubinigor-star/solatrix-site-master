@@ -1,4 +1,4 @@
-const PHONE = '972547299727';
+const PHONE = '972542790088';
 const LOGO_SRC = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_298,h_194,al_c,q_90,enc_avif,quality_auto/Solatrix%20Logo%20Sait%20Main.png';
 
 const WHATSAPP_ICON = `
@@ -69,7 +69,6 @@ function addHeaderStyles() {
     .siteHeader.calculatorPublicHeader .mobileMenu a{width:100%;border:1px solid rgba(234,219,199,.95);background:rgba(255,255,255,.92);border-radius:18px;padding:15px 18px;text-align:center;text-decoration:none;color:#071b2f;font-size:17px;font-weight:950;box-shadow:0 10px 24px rgba(28,20,12,.06)}
     .siteHeader.calculatorPublicHeader .mobileMenu a.whatsappMobile{display:flex;align-items:center;justify-content:center;gap:9px;background:#25D366;color:#fff}
 
-    /* The calculator already contains contextual CTAs; never cover content with a persistent action dock. */
     [data-solatrix-persistent-actions],
     .mobileBottomBar,
     .mobile-bottom-bar,
