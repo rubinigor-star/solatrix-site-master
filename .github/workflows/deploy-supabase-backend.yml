@@ -54,6 +54,10 @@ jobs:
           test "$SUPABASE_PROJECT_ID" = "nafzypkwdaxmsswgyuuk"
       - name: Link production project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+      - name: Normalize legacy migration history
+        run: |
+          PGPASSWORD="$SUPABASE_DB_PASSWORD" psql "$(cat supabase/.temp/pooler-url)" -v ON_ERROR_STOP=1 -c \
+            "update supabase_migrations.schema_migrations set version = '202607100001', name = 'crm_foundation' where version = '20260710' and name = '001_crm_foundation';"
       - name: Show migration status before deployment
         run: supabase migration list --linked
       - name: Apply pending database migrations
