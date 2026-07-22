@@ -1,6 +1,26 @@
+import { jsPDF } from 'jspdf';
+
 const FONT_LINK_ID = 'solatrix-report-fonts-v1';
 const STYLE_ID = 'solatrix-report-typography-v1';
 const HEEBO_VARIABLE_FONT_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/heebo/Heebo%5Bwght%5D.ttf';
+
+function fixRtlParentheses(value) {
+  if (typeof value !== 'string') return value;
+  if (!/[\u0590-\u05ff]/.test(value) || !/[()]/.test(value)) return value;
+  return value.replace(/\(/g, '\uFFF0').replace(/\)/g, '(').replace(/\uFFF0/g, ')');
+}
+
+function installPdfRtlParenthesesPatch() {
+  if (jsPDF.API.__solatrixRtlParenthesesPatched) return;
+  jsPDF.API.__solatrixRtlParenthesesPatched = true;
+  const nativeText = jsPDF.API.text;
+  jsPDF.API.text = function patchedText(text, ...args) {
+    const normalized = Array.isArray(text)
+      ? text.map(fixRtlParentheses)
+      : fixRtlParentheses(text);
+    return nativeText.call(this, normalized, ...args);
+  };
+}
 
 function installPdfFontFetchPatch() {
   if (window.__solatrixPdfFontFetchPatched) return;
@@ -16,6 +36,7 @@ function installPdfFontFetchPatch() {
 }
 
 function installReportFonts() {
+  installPdfRtlParenthesesPatch();
   installPdfFontFetchPatch();
 
   if (!document.getElementById(FONT_LINK_ID)) {
