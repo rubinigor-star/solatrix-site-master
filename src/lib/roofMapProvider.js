@@ -1,3 +1,5 @@
+import './govMapFetchBridge.js';
+
 const providers = new Map([
   ['existing-imagery', {
     id: 'existing-imagery',
