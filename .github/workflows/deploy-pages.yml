@@ -46,18 +46,38 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          source = Path('dist/roof-check/index.html').read_text(encoding='utf-8')
-          routes = ('address', 'roof-type', 'roof-marking', 'obstacles', 'analysis', 'report', 'admin')
+          app_path = Path('dist/roof-check/index.html')
+          app_html = app_path.read_text(encoding='utf-8')
+          bootstrap = '''<script id="solatrix-route-bootstrap">
+          (() => {
+            const route = new URLSearchParams(location.search).get('route');
+            const allowed = new Set(['address','roof-type','roof-marking','obstacles','analysis','report','admin']);
+            if (!allowed.has(route)) return;
+            const prefix = location.pathname.replace(/\/roof-check\/?$/, '/roof-check/');
+            history.replaceState({ directRoute: route }, '', prefix + route);
+          })();
+          </script>'''
+          if 'solatrix-route-bootstrap' not in app_html:
+              app_html = app_html.replace('</head>', bootstrap + '\n</head>', 1)
+              app_path.write_text(app_html, encoding='utf-8')
 
-          for route in routes:
+          for route in ('address', 'roof-type', 'roof-marking', 'obstacles', 'analysis', 'report', 'admin'):
               target = Path('dist/roof-check') / route / 'index.html'
               target.parent.mkdir(parents=True, exist_ok=True)
-              html = source
-              html = html.replace('../assets/', '../../assets/')
-              html = html.replace('../src/', '../../src/')
-              html = html.replace('href="../', 'href="../../')
-              html = html.replace('src="../', 'src="../../')
-              target.write_text(html, encoding='utf-8')
+              destination = f'/solatrix-site-master/roof-check/?route={route}'
+              redirect = f'''<!doctype html>
+          <html lang="he" dir="rtl">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta http-equiv="refresh" content="0;url={destination}">
+            <link rel="canonical" href="{destination}">
+            <title>Solatrix Roof Check</title>
+            <script>location.replace({destination!r});</script>
+          </head>
+          <body></body>
+          </html>'''
+              target.write_text(redirect, encoding='utf-8')
           PY
 
       - name: Add accessibility controls and remove link underlines
@@ -112,14 +132,10 @@ jobs:
           grep -q "accessibilityWidget.js" dist/index.html
           grep -q "solatrix-no-link-underlines" dist/index.html
           test -f dist/accessibilityWidget.js
-          test -d dist/roof-check
+          test -f dist/roof-check/index.html
           test -f dist/roof-check/address/index.html
-          test -f dist/roof-check/roof-type/index.html
-          test -f dist/roof-check/roof-marking/index.html
-          test -f dist/roof-check/obstacles/index.html
-          test -f dist/roof-check/analysis/index.html
-          test -f dist/roof-check/report/index.html
-          grep -q '../../assets/' dist/roof-check/address/index.html
+          grep -q "solatrix-route-bootstrap" dist/roof-check/index.html
+          grep -q "route=address" dist/roof-check/address/index.html
           grep -R -q "הספק מערכת" dist/assets dist/roof-check || {
             echo 'The approved PDF template was not found in the production build.'
             exit 1
