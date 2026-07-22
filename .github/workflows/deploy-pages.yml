@@ -1,6 +1,11 @@
 name: Deploy Solatrix production site
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
