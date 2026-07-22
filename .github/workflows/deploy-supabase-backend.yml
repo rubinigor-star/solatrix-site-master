@@ -54,6 +54,8 @@ jobs:
           test "$SUPABASE_PROJECT_ID" = "nafzypkwdaxmsswgyuuk"
       - name: Link production project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+      - name: Repair legacy migration history once
+        run: supabase migration repair --linked --status reverted 20260710
       - name: Show migration status before deployment
         run: supabase migration list --linked
       - name: Apply pending database migrations
