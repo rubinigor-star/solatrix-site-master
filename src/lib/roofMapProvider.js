@@ -1,4 +1,5 @@
 import './govMapFetchBridge.js';
+import '../roofGovMapVisualPatch.js';
 
 const providers = new Map([
   ['existing-imagery', {
