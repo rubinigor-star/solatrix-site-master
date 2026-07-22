@@ -1,4 +1,3 @@
-import './govMapDomainGuard.js';
 import './govMapFetchBridge.js';
 import '../roofGovMapVisualPatch.js';
 
