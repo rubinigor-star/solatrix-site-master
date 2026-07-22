@@ -1,6 +1,9 @@
 name: Deploy Solatrix production site
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -36,6 +39,14 @@ jobs:
 
       - name: Build production
         run: npm run build
+
+      - name: Publish direct Roof Check routes
+        run: |
+          test -f dist/roof-check/index.html
+          for route in address roof-type roof-marking obstacles analysis report admin; do
+            mkdir -p "dist/roof-check/$route"
+            cp dist/roof-check/index.html "dist/roof-check/$route/index.html"
+          done
 
       - name: Add accessibility controls and remove link underlines
         run: |
@@ -90,6 +101,12 @@ jobs:
           grep -q "solatrix-no-link-underlines" dist/index.html
           test -f dist/accessibilityWidget.js
           test -d dist/roof-check
+          test -f dist/roof-check/address/index.html
+          test -f dist/roof-check/roof-type/index.html
+          test -f dist/roof-check/roof-marking/index.html
+          test -f dist/roof-check/obstacles/index.html
+          test -f dist/roof-check/analysis/index.html
+          test -f dist/roof-check/report/index.html
           grep -R -q "הספק מערכת" dist/assets dist/roof-check || {
             echo 'The approved PDF template was not found in the production build.'
             exit 1
