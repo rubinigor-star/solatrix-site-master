@@ -43,10 +43,22 @@ jobs:
       - name: Publish direct Roof Check routes
         run: |
           test -f dist/roof-check/index.html
-          for route in address roof-type roof-marking obstacles analysis report admin; do
-            mkdir -p "dist/roof-check/$route"
-            cp dist/roof-check/index.html "dist/roof-check/$route/index.html"
-          done
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('dist/roof-check/index.html').read_text(encoding='utf-8')
+          routes = ('address', 'roof-type', 'roof-marking', 'obstacles', 'analysis', 'report', 'admin')
+
+          for route in routes:
+              target = Path('dist/roof-check') / route / 'index.html'
+              target.parent.mkdir(parents=True, exist_ok=True)
+              html = source
+              html = html.replace('../assets/', '../../assets/')
+              html = html.replace('../src/', '../../src/')
+              html = html.replace('href="../', 'href="../../')
+              html = html.replace('src="../', 'src="../../')
+              target.write_text(html, encoding='utf-8')
+          PY
 
       - name: Add accessibility controls and remove link underlines
         run: |
@@ -107,6 +119,7 @@ jobs:
           test -f dist/roof-check/obstacles/index.html
           test -f dist/roof-check/analysis/index.html
           test -f dist/roof-check/report/index.html
+          grep -q '../../assets/' dist/roof-check/address/index.html
           grep -R -q "הספק מערכת" dist/assets dist/roof-check || {
             echo 'The approved PDF template was not found in the production build.'
             exit 1
