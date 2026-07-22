@@ -17,7 +17,7 @@ const status=document.querySelector('#status');
 let objectUrl='';
 
 const sample={
-  customer:{name:'איגור רובין',phone:'052-513-8899'},
+  customer:{name:'איגור רובין',phone:'054-279-0088'},
   reportData:{
     roofData:{address:'ויצו 24, חיפה',roofType:'residential',monthlyBill:850,surfaces:[{area:162}]},
     calculationModel:{roofArea:162,usableArea:133,panels:35,systemSizeKwp:22.1,monthlyBill:850,isCommercial:false}
