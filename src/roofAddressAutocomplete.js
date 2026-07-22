@@ -43,7 +43,7 @@ function installAutocomplete() {
 
   const note = document.createElement('small');
   note.className = 'roofAddressAutocompleteNote';
-  note.textContent = 'התחילו להקליד רחוב ובחרו את העיר מהרשימה. מומלץ להוסיף מספר בית.';
+  note.textContent = 'התחילו להקליד רחוב ובחרו כתובת מהרשימה. מומלץ להוסיף מספר בית.';
   host.appendChild(note);
 
   input.addEventListener('input', () => {
@@ -55,20 +55,21 @@ function installAutocomplete() {
     window.clearTimeout(searchTimer);
     const query = streetQuery(input.value);
     if (query.length < MIN_QUERY_LENGTH) {
-      closeSuggestions(input, list);
+      closeSuggestions(input, list, host);
+      note.textContent = 'התחילו להקליד רחוב ובחרו כתובת מהרשימה. מומלץ להוסיף מספר בית.';
       return;
     }
-    searchTimer = window.setTimeout(() => searchOfficialStreets({ input, list, note, query }), DEBOUNCE_MS);
+    searchTimer = window.setTimeout(() => searchOfficialStreets({ input, list, note, host, query }), DEBOUNCE_MS);
   });
 
-  input.addEventListener('keydown', (event) => handleKeyboard(event, input, list));
-  input.addEventListener('blur', () => window.setTimeout(() => closeSuggestions(input, list), 180));
+  input.addEventListener('keydown', (event) => handleKeyboard(event, input, list, host));
+  input.addEventListener('blur', () => window.setTimeout(() => closeSuggestions(input, list, host), 180));
 }
 
-async function searchOfficialStreets({ input, list, note, query }) {
+async function searchOfficialStreets({ input, list, note, host, query }) {
   requestController?.abort();
   requestController = new AbortController();
-  note.textContent = 'מחפשים רחובות ויישובים במאגר הממשלתי…';
+  note.textContent = 'מחפשים כתובות במאגר הממשלתי…';
 
   const params = new URLSearchParams({
     resource_id: STREET_RESOURCE_ID,
@@ -84,10 +85,10 @@ async function searchOfficialStreets({ input, list, note, query }) {
     if (!response.ok) throw new Error(`Street search failed: ${response.status}`);
     const payload = await response.json();
     const suggestions = uniqueSuggestions(payload?.result?.records || [], query).slice(0, 8);
-    renderSuggestions({ input, list, note, suggestions });
+    renderSuggestions({ input, list, note, host, suggestions });
   } catch (error) {
     if (error.name === 'AbortError') return;
-    closeSuggestions(input, list);
+    closeSuggestions(input, list, host);
     note.textContent = 'לא הצלחנו לטעון הצעות כרגע. אפשר להזין רחוב, מספר ועיר באופן ידני.';
   }
 }
@@ -116,10 +117,10 @@ function uniqueSuggestions(records, query) {
     });
 }
 
-function renderSuggestions({ input, list, note, suggestions }) {
+function renderSuggestions({ input, list, note, host, suggestions }) {
   list.replaceChildren();
   if (!suggestions.length) {
-    closeSuggestions(input, list);
+    closeSuggestions(input, list, host);
     note.textContent = 'לא נמצאו הצעות. נסו להוסיף או לשנות את שם העיר.';
     return;
   }
@@ -131,18 +132,19 @@ function renderSuggestions({ input, list, note, suggestions }) {
     button.className = 'roofAddressSuggestion';
     button.setAttribute('role', 'option');
     button.dataset.index = String(index);
-    button.innerHTML = `<b>${escapeHtml(suggestion.street)}</b><span>${escapeHtml(suggestion.city)}</span>`;
+    button.innerHTML = `<span class="roofAddressSuggestionPin" aria-hidden="true">⌖</span><span class="roofAddressSuggestionText"><b>${escapeHtml(suggestion.street)}${number ? ` ${escapeHtml(number)}` : ''}</b><small>${escapeHtml(suggestion.city)}</small></span>`;
     button.addEventListener('mousedown', (event) => event.preventDefault());
-    button.addEventListener('click', () => chooseSuggestion(input, list, note, suggestion, number));
+    button.addEventListener('click', () => chooseSuggestion(input, list, note, host, suggestion, number));
     list.appendChild(button);
   });
 
   list.hidden = false;
+  host.classList.add('suggestionsOpen');
   input.setAttribute('aria-expanded', 'true');
-  note.textContent = 'בחרו רחוב ועיר מהרשימה.';
+  note.textContent = 'בחרו את הכתובת המתאימה מהרשימה.';
 }
 
-function chooseSuggestion(input, list, note, suggestion, number) {
+function chooseSuggestion(input, list, note, host, suggestion, number) {
   input.value = `${suggestion.street}${number ? ` ${number}` : ''}, ${suggestion.city}`;
   input.dataset.autocompleteSelecting = 'true';
   input.dataset.officialAddress = 'true';
@@ -151,33 +153,37 @@ function chooseSuggestion(input, list, note, suggestion, number) {
   input.dispatchEvent(new Event('input', { bubbles: true }));
   input.dataset.officialAddress = 'true';
   input.dispatchEvent(new Event('change', { bubbles: true }));
-  closeSuggestions(input, list);
+  closeSuggestions(input, list, host);
   note.textContent = number
-    ? 'הכתובת נבחרה מהמאגר הממשלתי ותועבר למפה.'
+    ? 'הכתובת נבחרה ותועבר למפה.'
     : 'הרחוב והעיר נבחרו. הוסיפו מספר בית לדיוק מרבי.';
   input.focus();
 }
 
-function handleKeyboard(event, input, list) {
+function handleKeyboard(event, input, list, host) {
   if (list.hidden) return;
   const options = [...list.querySelectorAll('.roofAddressSuggestion')];
   if (!options.length) return;
   const active = document.activeElement;
-  let index = options.indexOf(active);
+  const index = options.indexOf(active);
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     options[(index + 1 + options.length) % options.length].focus();
   } else if (event.key === 'ArrowUp') {
     event.preventDefault();
     options[(index - 1 + options.length) % options.length].focus();
+  } else if (event.key === 'Enter' && index >= 0) {
+    event.preventDefault();
+    options[index].click();
   } else if (event.key === 'Escape') {
-    closeSuggestions(input, list);
+    closeSuggestions(input, list, host);
     input.focus();
   }
 }
 
-function closeSuggestions(input, list) {
+function closeSuggestions(input, list, host) {
   list.hidden = true;
+  host?.classList.remove('suggestionsOpen');
   input.setAttribute('aria-expanded', 'false');
 }
 
@@ -189,12 +195,26 @@ function escapeHtml(value) {
 
 const style = document.createElement('style');
 style.textContent = `
-  .roofAddressAutocompleteHost{position:relative}
-  .roofAddressSuggestions{position:absolute;z-index:30;top:calc(100% - 2px);right:0;left:0;max-height:310px;overflow:auto;border:1px solid rgba(30,43,55,.14);border-radius:18px;background:#fff;box-shadow:0 18px 45px rgba(26,35,44,.18);padding:7px;direction:rtl}
-  .roofAddressSuggestion{display:flex;width:100%;align-items:center;justify-content:space-between;gap:16px;border:0;border-radius:12px;background:#fff;padding:12px 14px;color:#14283a;font:inherit;text-align:right;cursor:pointer}
+  .roofAddressAutocompleteHost{position:relative;isolation:isolate}
+  .roofAddressSuggestions[hidden]{display:none!important}
+  .roofAddressSuggestions{position:relative;z-index:1;width:100%;max-height:300px;overflow-y:auto;overscroll-behavior:contain;margin-top:8px;border:1px solid rgba(30,43,55,.14);border-radius:16px;background:#fff;box-shadow:0 12px 28px rgba(26,35,44,.12);padding:6px;direction:rtl;scrollbar-width:thin}
+  .roofAddressSuggestion{display:grid;grid-template-columns:34px minmax(0,1fr);width:100%;align-items:center;gap:10px;border:0;border-bottom:1px solid rgba(30,43,55,.08);border-radius:10px;background:#fff;padding:11px 12px;color:#14283a;font:inherit;text-align:right;cursor:pointer;min-height:58px}
+  .roofAddressSuggestion:last-child{border-bottom:0}
   .roofAddressSuggestion:hover,.roofAddressSuggestion:focus{outline:none;background:#fff4df}
-  .roofAddressSuggestion b{font-weight:900}.roofAddressSuggestion span{color:#647383;font-size:14px}
-  .roofAddressAutocompleteNote{display:block;margin-top:8px;color:#6c7885;font-size:13px;line-height:1.5}
+  .roofAddressSuggestionPin{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:#fff4df;color:#e68a00;font-size:19px;font-weight:900}
+  .roofAddressSuggestionText{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:2px}
+  .roofAddressSuggestionText b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:900;line-height:1.3}
+  .roofAddressSuggestionText small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#647383;font-size:13px;line-height:1.35}
+  .roofAddressAutocompleteNote{display:block;margin-top:7px;color:#6c7885;font-size:13px;line-height:1.45}
+  .roofAddressAutocompleteHost.suggestionsOpen>input{border-color:#f5a11a!important;box-shadow:0 0 0 3px rgba(245,161,26,.13)!important}
+  @media (max-width:760px){
+    .roofAddressSuggestions{max-height:238px;margin-top:7px;border-radius:14px;padding:5px;box-shadow:0 10px 22px rgba(26,35,44,.11)}
+    .roofAddressSuggestion{grid-template-columns:32px minmax(0,1fr);gap:9px;min-height:56px;padding:10px}
+    .roofAddressSuggestionPin{width:28px;height:28px;border-radius:9px;font-size:18px}
+    .roofAddressSuggestionText b{font-size:15px}
+    .roofAddressSuggestionText small{font-size:12.5px}
+    .roofAddressAutocompleteNote{font-size:12px;margin-top:6px}
+  }
 `;
 document.head.appendChild(style);
 
