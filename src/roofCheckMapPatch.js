@@ -74,8 +74,10 @@ function getEnteredAddress() {
 function rememberAddress(event) {
   const input = event.target?.closest?.('[data-field="address"]');
   if (!input) return;
-  const nextAddress = String(input.value || '').trim();
-  if (patchState.resolvedAddress && nextAddress !== patchState.resolvedAddress) {
+  const nextAddress = String(input.value || '').replace(/\s+/g, ' ').trim();
+  let previousAddress = '';
+  try { previousAddress = localStorage.getItem(ADDRESS_KEY)?.replace(/\s+/g, ' ').trim() || ''; } catch {}
+  if (nextAddress !== previousAddress || (patchState.resolvedAddress && nextAddress !== patchState.resolvedAddress)) {
     patchState.surfaces = [];
     patchState.currentPoints = [];
     patchState.drawing = false;
@@ -129,12 +131,9 @@ function loadLeaflet() {
 }
 
 function getAddressCenter() {
-  const address = getEnteredAddress().toLowerCase();
-  if (address.includes('ירושלים') || address.includes('jerusalem')) return [31.778, 35.225];
-  if (address.includes('תל') || address.includes('tel aviv')) return [32.0853, 34.7818];
-  if (address.includes('חיפה') || address.includes('haifa') || address.includes('חרמון')) return [32.7937, 34.9892];
-  if (address.includes('באר') || address.includes('beer')) return [31.2529, 34.7915];
-  return [32.7937, 34.9892];
+  // Neutral Israel overview while the actual address is being geocoded.
+  // Never show a previous/test street as if it were the requested address.
+  return [31.7683, 35.2137];
 }
 
 function surfaceFromLatLngs(latlngs, source = 'manual') {
@@ -326,11 +325,14 @@ function distanceMeters(a, b) {
 }
 
 async function geocodeAddress(address) {
+  const israelQualifiedAddress = /(?:ישראל|israel)/i.test(address) ? address : `${address}, ישראל`;
   const params = new URLSearchParams({
-    q: address,
+    q: israelQualifiedAddress,
     format: 'jsonv2',
     limit: '1',
     countrycodes: 'il',
+    layer: 'address',
+    dedupe: '1',
     polygon_geojson: '1',
     addressdetails: '1',
     'accept-language': 'he'
@@ -467,7 +469,7 @@ async function installMapIntoOriginalScreen() {
   if (patchState.map) {
     try { patchState.map.remove(); } catch {}
   }
-  patchState.map = L.map('solatrix-real-roof-map', { zoomControl: true, attributionControl: true, maxZoom: mapProvider.maxZoom, doubleClickZoom: false }).setView(center, 18);
+  patchState.map = L.map('solatrix-real-roof-map', { zoomControl: true, attributionControl: true, maxZoom: mapProvider.maxZoom, doubleClickZoom: false }).setView(center, 8);
   L.tileLayer(mapProvider.tileUrl, { maxZoom: mapProvider.maxZoom, attribution: mapProvider.attribution }).addTo(patchState.map);
   patchState.layerGroup = L.layerGroup().addTo(patchState.map);
   patchState.map.on('click', (event) => {

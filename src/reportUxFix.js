@@ -1,10 +1,9 @@
 import './reportUxFix.css';
 import './reportTypographyPatch.js';
-import { getRoofCheckLifecycleSession, isValidIsraeliPhone, LeadSubmissionError, syncRoofCheckLead } from './lib/leadApi.js';
+import { isValidIsraeliPhone, LeadSubmissionError, syncRoofCheckLead } from './lib/leadApi.js';
 import { formatPublicLeadReference } from './lib/publicReference.js';
 import { blobToBase64, createRoofCheckPdf } from './reportPdfClient.js';
 
-const DRAFT_KEY = 'solatrix_roof_check_lead_draft';
 let startedLeadTimer = 0;
 let startedLeadSignature = '';
 
@@ -23,8 +22,6 @@ function enhanceReportExperience() {
   originalPdfButton.tabIndex = -1;
   originalLeadFields.hidden = true;
 
-  const draft = readDraft();
-  const lifecycleSession = getRoofCheckLifecycleSession();
   const originalName = originalLeadFields.querySelector('[data-field="leadName"]');
   const originalPhone = originalLeadFields.querySelector('[data-field="leadPhone"]');
   const originalEmail = originalLeadFields.querySelector('[data-stage-field="email"]');
@@ -44,11 +41,11 @@ function enhanceReportExperience() {
     <div class="reportWhatsappForm" data-report-form>
       <p class="reportWhatsappFormIntro">מלאו את הפרטים ואשרו שנוכל לשלוח את הדוח ולחזור אליכם בנוגע לבדיקה ולהצעה.</p>
       <div class="reportWhatsappGrid">
-        <label><span>שם מלא *</span><input name="name" autocomplete="name" maxlength="160" value="${escapeAttr(originalName?.value || draft.name || '')}" /></label>
-        <label><span>מספר WhatsApp *</span><input name="phone" autocomplete="tel" inputmode="tel" maxlength="40" value="${escapeAttr(originalPhone?.value || draft.phone || lifecycleSession.phone || '')}" /></label>
-        <label class="wide"><span>אימייל (לא חובה)</span><input name="email" autocomplete="email" type="email" maxlength="320" value="${escapeAttr(originalEmail?.value || draft.email || '')}" /></label>
+        <label><span>שם מלא *</span><input name="name" autocomplete="off" maxlength="160" value="" /></label>
+        <label><span>מספר WhatsApp *</span><input name="phone" autocomplete="off" inputmode="tel" maxlength="40" value="" /></label>
+        <label class="wide"><span>אימייל (לא חובה)</span><input name="email" autocomplete="off" type="email" maxlength="320" value="" /></label>
       </div>
-      <label class="reportWhatsappConsent"><input type="checkbox" name="consent" ${lifecycleSession.consent ? 'checked' : ''} /><span>אני מבקש/ת לקבל את דוח ה-PDF ב-WhatsApp ומאשר/ת לנציג Solatrix Energy ליצור איתי קשר בנוגע לבדיקה ולהצעה.</span></label>
+      <label class="reportWhatsappConsent"><input type="checkbox" name="consent" /><span>אני מבקש/ת לקבל את דוח ה-PDF ב-WhatsApp ומאשר/ת לנציג Solatrix Energy ליצור איתי קשר בנוגע לבדיקה ולהצעה.</span></label>
       <p class="reportWhatsappError" data-report-error hidden></p>
       <button class="reportWhatsappSubmit" type="button" data-submit-report-request>שליחת הדוח ל-WhatsApp</button>
       <div class="reportWhatsappSuccess" data-report-success hidden tabindex="-1"></div>
@@ -128,7 +125,6 @@ async function submitWhatsappReport({ offer, reportCard, originalName, originalP
   syncOriginalField(originalName, name);
   syncOriginalField(originalPhone, phone);
   if (originalEmail) syncOriginalField(originalEmail, email);
-  writeDraft({ ...readDraft(), name, phone, email });
 
   const reportData = collectReportData(reportCard, phone);
 
@@ -242,10 +238,6 @@ function serializableRoofGeometry() {
 
 function syncOriginalField(field, value) { if (field) { field.value = value; field.dispatchEvent(new Event('input', { bubbles: true })); } }
 function normalizePhone(value) { const digits = String(value || '').replace(/\D/g, ''); return digits.startsWith('0') ? `972${digits.slice(1)}` : digits; }
-function readDraft() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'); } catch { return {}; } }
-function writeDraft(draft) { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); }
-function escapeAttr(value = '') { return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])); }
-
 const observer = new MutationObserver(enhanceReportExperience);
 observer.observe(document.documentElement, { childList: true, subtree: true });
 window.addEventListener('DOMContentLoaded', enhanceReportExperience);

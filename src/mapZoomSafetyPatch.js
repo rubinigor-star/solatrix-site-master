@@ -1,8 +1,8 @@
 const PATCH_FLAG = '__solatrixMapZoomSafetyInstalledV3';
 const ESRI_IMAGERY_PART = 'World_Imagery/MapServer/tile';
-const LAST_RELIABLE_NATIVE_ZOOM = 17;
-const DISPLAY_MAX_ZOOM = 19;
-const INITIAL_SAFE_ZOOM = 17;
+const LAST_RELIABLE_NATIVE_ZOOM = 19;
+const DISPLAY_MAX_ZOOM = 21;
+const INITIAL_SAFE_ZOOM = 21;
 
 if (!window[PATCH_FLAG]) {
   window[PATCH_FLAG] = true;
