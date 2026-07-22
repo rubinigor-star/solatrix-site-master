@@ -8,7 +8,7 @@ const status = document.querySelector('#status');
 let objectUrl = '';
 
 const sample = {
-  customer: { name: 'איגור רובין', phone: '052-513-8899' },
+  customer: { name: 'איגור רובין', phone: '054-279-0088' },
   reportData: {
     roofData: {
       address: 'ויצו 24, חיפה',
