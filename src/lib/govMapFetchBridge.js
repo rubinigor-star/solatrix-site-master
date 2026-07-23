@@ -3,6 +3,7 @@ const NOMINATIM_HOST = 'nominatim.openstreetmap.org';
 const OVERPASS_HOSTS = new Set(['overpass-api.de', 'overpass.kumi.systems']);
 const OVERPASS_TIMEOUT_MS = 3500;
 const INSTALL_FLAG = '__solatrixGovMapFetchBridgeInstalled';
+const OFFICIAL_MAP_BOOTSTRAP_FLAG = '__solatrixOfficialGovMapBootstrapRequested';
 
 function getGovMapToken() {
   return String(
@@ -10,6 +11,15 @@ function getGovMapToken() {
     import.meta.env.VITE_GOVMAP_API_TOKEN ||
     ''
   ).trim();
+}
+
+function bootstrapOfficialGovMap() {
+  if (typeof window === 'undefined' || window[OFFICIAL_MAP_BOOTSTRAP_FLAG]) return;
+  window[OFFICIAL_MAP_BOOTSTRAP_FLAG] = true;
+  import('../roofGovMapVisualPatch.js').catch((error) => {
+    window[OFFICIAL_MAP_BOOTSTRAP_FLAG] = false;
+    console.error('Official GovMap visual engine failed to load.', error);
+  });
 }
 
 function mercatorToWgs84(x, y) {
@@ -135,6 +145,7 @@ async function fetchOverpassWithoutBlocking(input, init, originalFetch) {
 function installGovMapFetchBridge() {
   if (typeof window === 'undefined' || window[INSTALL_FLAG]) return;
   window[INSTALL_FLAG] = true;
+  bootstrapOfficialGovMap();
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = async function solatrixGovMapFetch(input, init = {}) {
@@ -168,4 +179,4 @@ function installGovMapFetchBridge() {
 
 installGovMapFetchBridge();
 
-export { getGovMapToken, installGovMapFetchBridge, mercatorToWgs84, parsePointWkt, pointFromResult };
+export { bootstrapOfficialGovMap, getGovMapToken, installGovMapFetchBridge, mercatorToWgs84, parsePointWkt, pointFromResult };
