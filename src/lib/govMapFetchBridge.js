@@ -1,3 +1,5 @@
+import './govMapAutocompleteBridge.js';
+
 const GOVMAP_AUTOCOMPLETE_URL = 'https://www.govmap.gov.il/api/search-service/autocomplete';
 const NOMINATIM_HOST = 'nominatim.openstreetmap.org';
 const OVERPASS_HOSTS = new Set(['overpass-api.de', 'overpass.kumi.systems']);
@@ -6,11 +8,7 @@ const INSTALL_FLAG = '__solatrixGovMapFetchBridgeInstalled';
 const OFFICIAL_MAP_BOOTSTRAP_FLAG = '__solatrixOfficialGovMapBootstrapRequested';
 
 function getGovMapToken() {
-  return String(
-    window.__SOLATRIX_CONFIG__?.govMapApiToken ||
-    import.meta.env.VITE_GOVMAP_API_TOKEN ||
-    ''
-  ).trim();
+  return String(window.__SOLATRIX_CONFIG__?.govMapApiToken || import.meta.env.VITE_GOVMAP_API_TOKEN || '').trim();
 }
 
 function bootstrapOfficialGovMap() {
@@ -39,17 +37,9 @@ function parsePointWkt(value = '') {
 }
 
 function pointFromResult(result) {
-  const shapePoint = parsePointWkt(result?.shape);
+  const shapePoint = parsePointWkt(result?.shape || result?.geometry || result?.data?.shape);
   if (shapePoint) return shapePoint;
-
-  const candidates = [
-    result?.data?.coordinates,
-    result?.data?.point,
-    result?.data?.centroid,
-    result?.coordinates,
-    result?.centroid
-  ];
-
+  const candidates = [result?.data?.coordinates, result?.data?.point, result?.data?.centroid, result?.coordinates, result?.centroid];
   for (const value of candidates) {
     if (!Array.isArray(value) || value.length < 2) continue;
     const x = Number(value[0]);
@@ -58,69 +48,50 @@ function pointFromResult(result) {
     if (Math.abs(x) <= 180 && Math.abs(y) <= 90) return { lat: y, lng: x };
     return mercatorToWgs84(x, y);
   }
-
   const x = Number(result?.data?.x ?? result?.x);
   const y = Number(result?.data?.y ?? result?.y);
   if (Number.isFinite(x) && Number.isFinite(y)) {
     if (Math.abs(x) <= 180 && Math.abs(y) <= 90) return { lat: y, lng: x };
     return mercatorToWgs84(x, y);
   }
-
   return null;
 }
 
-async function searchGovMapAddress(searchText, originalFetch, signal) {
-  const token = getGovMapToken();
-  if (!token || !searchText) return null;
+function collectResults(payload) {
+  if (Array.isArray(payload)) return payload;
+  const values = [payload?.results, payload?.data?.results, payload?.data, payload?.result, payload?.items];
+  return values.find(Array.isArray) || [];
+}
 
+async function searchGovMapAddress(searchText, originalFetch, signal) {
+  if (!searchText) return null;
   const response = await originalFetch(GOVMAP_AUTOCOMPLETE_URL, {
     method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      searchText,
-      language: 'he',
-      filterType: 'address',
-      maxResults: 8,
-      isAccurate: true,
-      apiKey: token
-    }),
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ searchText }),
     signal
   });
-
   if (!response.ok) throw new Error(`GovMap address search failed: ${response.status}`);
-  const payload = await response.json();
-  const results = Array.isArray(payload?.results) ? payload.results : [];
-
+  const results = collectResults(await response.json());
   for (const result of results) {
     const point = pointFromResult(result);
     if (!point) continue;
     return {
-      display_name: result.text || result.originalText || searchText,
+      display_name: result.text || result.originalText || result.caption || searchText,
       lat: String(point.lat),
       lon: String(point.lng),
       type: result.type || 'address',
       class: 'place',
       address: result.data || {},
-      govmap: {
-        id: result.id || '',
-        layerId: result.layerId || '',
-        objectId: result.objectId || ''
-      }
+      govmap: { id: result.id || '', layerId: result.layerId || '', objectId: result.objectId || '' }
     };
   }
-
   return null;
 }
 
 function emptyOverpassResponse(reason) {
   console.warn('Overpass outline lookup skipped; manual roof marking remains available.', reason);
-  return new Response(JSON.stringify({ elements: [] }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' }
-  });
+  return new Response(JSON.stringify({ elements: [] }), { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
 }
 
 async function fetchOverpassWithoutBlocking(input, init, originalFetch) {
@@ -129,7 +100,6 @@ async function fetchOverpassWithoutBlocking(input, init, originalFetch) {
   const externalSignal = init?.signal;
   const abortFromExternalSignal = () => controller.abort();
   externalSignal?.addEventListener?.('abort', abortFromExternalSignal, { once: true });
-
   try {
     const response = await originalFetch(input, { ...init, signal: controller.signal });
     if (!response.ok) return emptyOverpassResponse(`HTTP ${response.status}`);
@@ -146,33 +116,26 @@ function installGovMapFetchBridge() {
   if (typeof window === 'undefined' || window[INSTALL_FLAG]) return;
   window[INSTALL_FLAG] = true;
   bootstrapOfficialGovMap();
-
   const originalFetch = window.fetch.bind(window);
   window.fetch = async function solatrixGovMapFetch(input, init = {}) {
     const requestUrl = typeof input === 'string' ? input : input?.url;
     let parsedUrl = null;
     try { parsedUrl = new URL(requestUrl, window.location.href); } catch {}
-
     if (parsedUrl && OVERPASS_HOSTS.has(parsedUrl.host) && parsedUrl.pathname.includes('/api/interpreter')) {
       return fetchOverpassWithoutBlocking(input, init, originalFetch);
     }
-
     if (parsedUrl?.host === NOMINATIM_HOST && parsedUrl.pathname.includes('/search')) {
       const searchText = parsedUrl.searchParams.get('q') || '';
       try {
         const result = await searchGovMapAddress(searchText, originalFetch, init?.signal);
         if (result) {
           window.__solatrixGovMapLastAddress = result;
-          return new Response(JSON.stringify([result]), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json; charset=utf-8' }
-          });
+          return new Response(JSON.stringify([result]), { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
         }
       } catch (error) {
         console.warn('GovMap address lookup failed; falling back to Nominatim.', error);
       }
     }
-
     return originalFetch(input, init);
   };
 }
