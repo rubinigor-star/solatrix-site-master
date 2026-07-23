@@ -18,6 +18,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      VITE_GOVMAP_API_TOKEN: ${{ secrets.VITE_GOVMAP_API_TOKEN }}
     steps:
       - name: Checkout production
         uses: actions/checkout@v4
