@@ -1,5 +1,7 @@
 const GOVMAP_AUTOCOMPLETE_URL = 'https://www.govmap.gov.il/api/search-service/autocomplete';
 const NOMINATIM_HOST = 'nominatim.openstreetmap.org';
+const OVERPASS_HOSTS = new Set(['overpass-api.de', 'overpass.kumi.systems']);
+const OVERPASS_TIMEOUT_MS = 3500;
 const INSTALL_FLAG = '__solatrixGovMapFetchBridgeInstalled';
 
 function getGovMapToken() {
@@ -103,6 +105,33 @@ async function searchGovMapAddress(searchText, originalFetch, signal) {
   return null;
 }
 
+function emptyOverpassResponse(reason) {
+  console.warn('Overpass outline lookup skipped; manual roof marking remains available.', reason);
+  return new Response(JSON.stringify({ elements: [] }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' }
+  });
+}
+
+async function fetchOverpassWithoutBlocking(input, init, originalFetch) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
+  const externalSignal = init?.signal;
+  const abortFromExternalSignal = () => controller.abort();
+  externalSignal?.addEventListener?.('abort', abortFromExternalSignal, { once: true });
+
+  try {
+    const response = await originalFetch(input, { ...init, signal: controller.signal });
+    if (!response.ok) return emptyOverpassResponse(`HTTP ${response.status}`);
+    return response;
+  } catch (error) {
+    return emptyOverpassResponse(error?.name === 'AbortError' ? 'timeout' : error);
+  } finally {
+    window.clearTimeout(timeoutId);
+    externalSignal?.removeEventListener?.('abort', abortFromExternalSignal);
+  }
+}
+
 function installGovMapFetchBridge() {
   if (typeof window === 'undefined' || window[INSTALL_FLAG]) return;
   window[INSTALL_FLAG] = true;
@@ -112,6 +141,10 @@ function installGovMapFetchBridge() {
     const requestUrl = typeof input === 'string' ? input : input?.url;
     let parsedUrl = null;
     try { parsedUrl = new URL(requestUrl, window.location.href); } catch {}
+
+    if (parsedUrl && OVERPASS_HOSTS.has(parsedUrl.host) && parsedUrl.pathname.includes('/api/interpreter')) {
+      return fetchOverpassWithoutBlocking(input, init, originalFetch);
+    }
 
     if (parsedUrl?.host === NOMINATIM_HOST && parsedUrl.pathname.includes('/search')) {
       const searchText = parsedUrl.searchParams.get('q') || '';
