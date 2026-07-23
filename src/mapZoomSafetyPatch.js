@@ -1,3 +1,5 @@
+import './lib/govMapFetchBridge.js';
+
 const PATCH_FLAG = '__solatrixMapZoomSafetyInstalledV3';
 const ESRI_IMAGERY_PART = 'World_Imagery/MapServer/tile';
 const LAST_RELIABLE_NATIVE_ZOOM = 19;
