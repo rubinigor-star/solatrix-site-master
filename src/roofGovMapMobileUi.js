@@ -1,5 +1,5 @@
-const FLAG = '__solatrixGovMapMobileUiV5';
-const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v5';
+const FLAG = '__solatrixGovMapMobileUiV6';
+const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v6';
 
 let initialMapRevealDone = false;
 
@@ -23,12 +23,12 @@ function injectStyles() {
       .mapScreen .markStatus{display:none!important}
       .mapScreen .drawFooter{display:none!important}
       .solatrixGovMapSurfaceList{display:none!important}
-      .solatrixGovMapWrap{height:calc(100dvh - 205px)!important;min-height:390px!important;max-height:610px!important;border-radius:24px!important;scroll-margin-top:78px}
-      .solatrixGovMapCrosshair{display:block;position:absolute;z-index:60;left:50%;top:50%;width:68px;height:68px;transform:translate(-50%,-50%);pointer-events:none;opacity:.62;filter:drop-shadow(0 2px 3px rgba(0,0,0,.18))}
-      .solatrixGovMapCrosshair:before,.solatrixGovMapCrosshair:after{content:"";position:absolute;left:50%;top:50%;background:rgba(18,110,235,.72);border:1px solid rgba(255,255,255,.9);border-radius:4px;transform:translate(-50%,-50%)}
-      .solatrixGovMapCrosshair:before{width:68px;height:3px}.solatrixGovMapCrosshair:after{width:3px;height:68px}
-      .solatrixGovMapCrosshairRing{position:absolute;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%);border:3px solid rgba(18,110,235,.78);outline:2px solid rgba(255,255,255,.92);border-radius:50%;background:rgba(255,255,255,.08)}
-      .solatrixGovMapCrosshairDot{position:absolute;left:50%;top:50%;width:7px;height:7px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(18,110,235,.9);border:2px solid rgba(255,255,255,.95);box-sizing:content-box}
+      .solatrixGovMapWrap{height:clamp(360px,52dvh,480px)!important;min-height:360px!important;max-height:480px!important;border-radius:24px!important;scroll-margin-top:78px}
+      .solatrixGovMapCrosshair{display:block;position:absolute;z-index:60;left:50%;top:50%;width:62px;height:62px;transform:translate(-50%,-50%);pointer-events:none;opacity:.58;filter:drop-shadow(0 2px 3px rgba(0,0,0,.16))}
+      .solatrixGovMapCrosshair:before,.solatrixGovMapCrosshair:after{content:"";position:absolute;left:50%;top:50%;background:rgba(18,110,235,.68);border:1px solid rgba(255,255,255,.88);border-radius:4px;transform:translate(-50%,-50%)}
+      .solatrixGovMapCrosshair:before{width:62px;height:2px}.solatrixGovMapCrosshair:after{width:2px;height:62px}
+      .solatrixGovMapCrosshairRing{position:absolute;left:50%;top:50%;width:28px;height:28px;transform:translate(-50%,-50%);border:2px solid rgba(18,110,235,.74);outline:2px solid rgba(255,255,255,.9);border-radius:50%;background:rgba(255,255,255,.06)}
+      .solatrixGovMapCrosshairDot{position:absolute;left:50%;top:50%;width:6px;height:6px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(18,110,235,.88);border:2px solid rgba(255,255,255,.94);box-sizing:content-box}
       .solatrixGovMapMobileCounter{display:flex;position:absolute;z-index:61;left:12px;top:12px;align-items:center;gap:7px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.96);color:#126eeb;font:900 14px Assistant,sans-serif;box-shadow:0 8px 20px rgba(0,0,0,.16);pointer-events:none}
       .solatrixGovMapHint{right:10px!important;left:10px!important;bottom:10px!important;padding:9px 12px!important;font-size:14px!important;max-width:none!important}
       .solatrixGovMapMobileActions{display:grid;position:fixed;z-index:100000;left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));grid-template-columns:1fr 1fr;gap:8px;margin:0;padding:9px;border-radius:22px;background:rgba(255,255,255,.98);box-shadow:0 16px 42px rgba(8,29,52,.28);backdrop-filter:blur(14px);direction:rtl}
