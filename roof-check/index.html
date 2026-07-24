@@ -192,10 +192,7 @@
     <script type="module" crossorigin src="../src/roofCheckPublicHeader.js"></script>
     <script type="module" crossorigin src="../src/roofCheckApp.js"></script>
     <script type="module" crossorigin src="../src/roofAddressAutocomplete.js"></script>
-    <script type="module" crossorigin src="../src/roofMobileTargetPatch.js?v=4"></script>
-    <script type="module" crossorigin src="../src/roofMapVertexEditPatch.js"></script>
-    <script type="module" crossorigin src="../src/mapZoomSafetyPatch.js?v=3"></script>
-    <script type="module" crossorigin src="../src/roofCheckMapPatch.js"></script>
+    <script type="module" crossorigin src="../src/roofGovMapVisualPatch.js?v=1"></script>
     <script type="module" crossorigin src="../src/roofCalculationConsistencyPatch.js?v=2"></script>
     <script type="module" crossorigin src="../src/roofObstaclesMapPatch.js?v=2"></script>
     <script type="module" crossorigin src="../src/stagingPolish.js"></script>
@@ -222,26 +219,16 @@
         let scheduled = false;
         const applyRoofCheckHero = () => {
           scheduled = false;
-          const card = document.querySelector('.heroScreen .visualCard');
-          const hero = document.querySelector('.heroScreen .heroCard');
-          if (!card || !hero) return;
-
-          card.classList.add('roofCheckHeroImage');
-          let image = card.querySelector('.roofCheckHeroArtwork');
-          if (!image) {
-            image = document.createElement('img');
-            image.className = 'roofCheckHeroArtwork';
-            image.alt = 'Solatrix solar potential assessment report';
-            image.loading = 'eager';
-            card.appendChild(image);
+          const hero = document.querySelector('.heroScreen');
+          if (!hero) return;
+          const imageCard = hero.querySelector('.visualCard');
+          if (imageCard && !imageCard.classList.contains('roofCheckHeroImage')) {
+            imageCard.classList.add('roofCheckHeroImage');
+            imageCard.innerHTML = `<img class="roofCheckHeroArtwork" src="${IMAGE_URL}" alt="Solatrix Roof Check" />`;
           }
-          if (image.getAttribute('src') !== IMAGE_URL) image.setAttribute('src', IMAGE_URL);
-
-          const eyebrow = hero.querySelector('.eyebrow');
-          if (eyebrow && eyebrow.textContent !== 'SOLATRIX AI PLATFORM') eyebrow.textContent = 'SOLATRIX AI PLATFORM';
 
           const title = hero.querySelector('h1');
-          if (title && title.textContent !== 'הערכת פוטנציאל סולארי') title.textContent = 'הערכת פוטנציאל סולארי';
+          if (title && title.textContent !== 'בדיקת פוטנציאל סולארי') title.textContent = 'בדיקת פוטנציאל סולארי';
 
           const description = hero.querySelector('.heroText');
           const descriptionText = 'גלו את פוטנציאל ייצור החשמל, החיסכון והכדאיות של הגג שלכם תוך דקות.';
