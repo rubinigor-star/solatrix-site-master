@@ -1,3 +1,5 @@
+import './govMapMobileStabilityPatch.js';
+
 function blockDirectPdfOpening(event) {
   const pdfTrigger = event.target?.closest?.('[data-action="generatePdf"]');
   if (!pdfTrigger) return;
