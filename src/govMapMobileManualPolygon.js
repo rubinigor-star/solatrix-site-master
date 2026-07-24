@@ -1,13 +1,11 @@
 import { buildRoofGeometry, polygonAreaM2 } from './lib/roofGeometry.js';
 
-const FLAG = '__solatrixGovMapMobileManualPolygonV2';
-const MAP_ID = 'solatrix-official-govmap';
+const FLAG = '__solatrixGovMapMobileManualPolygonV3';
 const GEOMETRY_KEY = 'solatrix_roof_geometry_v1';
 const ADDRESS_KEY = 'solatrix_roof_check_address';
 
 let points = [];
-let lastView = null;
-let rendering = false;
+let dragState = null;
 
 function isMobileRoofPage() {
   const mobile = window.innerWidth <= 820 || (navigator.maxTouchPoints > 0 && window.innerWidth <= 960);
@@ -31,7 +29,6 @@ function ensureOverlay() {
     svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.classList.add('solatrixStableMobilePolygon');
     svg.setAttribute('aria-hidden', 'true');
-    svg.setAttribute('preserveAspectRatio', 'none');
     wrap.appendChild(svg);
   }
 
@@ -46,120 +43,82 @@ function ensureOverlay() {
   return { wrap, svg, badge };
 }
 
-function finite(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+function render() {
+  const ui = ensureOverlay();
+  if (!ui) return;
+  const { wrap, svg, badge } = ui;
+  const rect = wrap.getBoundingClientRect();
+  svg.setAttribute('viewBox', `0 0 ${Math.max(1, rect.width)} ${Math.max(1, rect.height)}`);
+
+  const coords = points.map((point) => `${point.x},${point.y}`).join(' ');
+  const shape = points.length >= 3
+    ? `<polygon points="${coords}"/>`
+    : points.length > 1
+      ? `<polyline points="${coords}"/>`
+      : '';
+  const markers = points.map((point, index) => `<circle cx="${point.x}" cy="${point.y}" r="7"/><text x="${point.x}" y="${point.y - 14}">${index + 1}</text>`).join('');
+  svg.innerHTML = `${shape}${markers}`;
+
+  badge.hidden = points.length === 0;
+  badge.textContent = `${points.length} נקודות`;
+
+  const done = document.querySelector('.nextTextBtn[data-action="next"]');
+  if (done) points.length >= 3 ? done.removeAttribute('disabled') : done.setAttribute('disabled', 'disabled');
 }
 
 function validItm(x, y) {
   return Number.isFinite(x) && Number.isFinite(y) && x >= 100000 && x <= 350000 && y >= 350000 && y <= 850000;
 }
 
-function extractMapView(value, depth = 0, seen = new Set()) {
-  if (value == null || depth > 8) return null;
+function extractCenter(value, depth = 0, seen = new Set()) {
+  if (value == null || depth > 7) return null;
   if (typeof value !== 'object' || seen.has(value)) return null;
   seen.add(value);
 
-  const xmin = finite(value.xmin ?? value.xMin ?? value.minX ?? value.left);
-  const xmax = finite(value.xmax ?? value.xMax ?? value.maxX ?? value.right);
-  const ymin = finite(value.ymin ?? value.yMin ?? value.minY ?? value.bottom);
-  const ymax = finite(value.ymax ?? value.yMax ?? value.maxY ?? value.top);
-  if (validItm(xmin, ymin) && validItm(xmax, ymax) && xmax > xmin && ymax > ymin) {
-    return { xmin, xmax, ymin, ymax, center: { x: (xmin + xmax) / 2, y: (ymin + ymax) / 2 } };
+  if (Array.isArray(value) && value.length >= 2) {
+    const x = Number(value[0]);
+    const y = Number(value[1]);
+    if (validItm(x, y)) return { x, y };
   }
 
-  const directPairs = [
+  const pairs = [
     [value.x, value.y],
     [value.X, value.Y],
     [value.centerX, value.centerY],
     [value.mapCenterX, value.mapCenterY]
   ];
-  for (const [a, b] of directPairs) {
-    const x = finite(a);
-    const y = finite(b);
-    if (validItm(x, y)) return { center: { x, y } };
+  for (const [a, b] of pairs) {
+    const x = Number(a);
+    const y = Number(b);
+    if (validItm(x, y)) return { x, y };
   }
 
-  if (Array.isArray(value) && value.length >= 2) {
-    const x = finite(value[0]);
-    const y = finite(value[1]);
-    if (validItm(x, y)) return { center: { x, y } };
-  }
-
-  const preferred = ['extent', 'mapExtent', 'visibleExtent', 'center', 'mapCenter', 'view', 'state', 'data', 'result'];
-  for (const key of preferred) {
-    if (!(key in value)) continue;
-    const nested = extractMapView(value[key], depth + 1, seen);
-    if (nested) return nested;
-  }
-  for (const nestedValue of Object.values(value)) {
-    const nested = extractMapView(nestedValue, depth + 1, seen);
-    if (nested) return nested;
+  for (const nested of Object.values(value)) {
+    const center = extractCenter(nested, depth + 1, seen);
+    if (center) return center;
   }
   return null;
 }
 
-async function readGovMapView() {
-  const candidates = ['getMapStatus', 'getMapState', 'getExtent', 'getCenter', 'getXY'];
+async function readCenterQuickly() {
+  const candidates = ['getCenter', 'getXY', 'getMapStatus', 'getMapState'];
   for (const name of candidates) {
     const fn = window.govmap?.[name];
     if (typeof fn !== 'function') continue;
     try {
       const result = fn.call(window.govmap);
-      const resolved = typeof result?.then === 'function' ? await result : result;
-      const view = extractMapView(resolved);
-      if (view) {
-        if (view.xmin != null) lastView = view;
-        else if (lastView) view.extent = lastView;
-        return view;
-      }
+      const resolved = await Promise.race([
+        Promise.resolve(result),
+        new Promise((resolve) => window.setTimeout(() => resolve(null), 250))
+      ]);
+      const center = extractCenter(resolved);
+      if (center) return center;
     } catch {}
   }
-  return lastView;
+  return null;
 }
 
-function projectPoint(point, rect, view) {
-  const extent = view?.xmin != null ? view : view?.extent;
-  if (point.itm && extent?.xmax > extent?.xmin && extent?.ymax > extent?.ymin) {
-    const x = ((point.itm.x - extent.xmin) / (extent.xmax - extent.xmin)) * rect.width;
-    const y = ((extent.ymax - point.itm.y) / (extent.ymax - extent.ymin)) * rect.height;
-    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
-  }
-  return { x: point.screenX ?? rect.width / 2, y: point.screenY ?? rect.height / 2 };
-}
-
-async function render() {
-  if (rendering) return;
-  rendering = true;
-  try {
-    const ui = ensureOverlay();
-    if (!ui) return;
-    const { wrap, svg, badge } = ui;
-    const rect = wrap.getBoundingClientRect();
-    svg.setAttribute('viewBox', `0 0 ${Math.max(1, rect.width)} ${Math.max(1, rect.height)}`);
-
-    const view = await readGovMapView();
-    const visible = points.map((point) => projectPoint(point, rect, view));
-    const coords = visible.map((point) => `${point.x},${point.y}`).join(' ');
-    const shape = points.length >= 3
-      ? `<polygon points="${coords}"/>`
-      : points.length > 1
-        ? `<polyline points="${coords}"/>`
-        : '';
-    const markers = visible.map((point, index) => `<circle cx="${point.x}" cy="${point.y}" r="7"/><text x="${point.x}" y="${point.y - 14}">${index + 1}</text>`).join('');
-    svg.innerHTML = `${shape}${markers}`;
-
-    badge.hidden = points.length === 0;
-    badge.textContent = `${points.length} נקודות`;
-
-    const done = document.querySelector('.nextTextBtn[data-action="next"]');
-    if (done) points.length >= 3 ? done.removeAttribute('disabled') : done.setAttribute('disabled', 'disabled');
-  } finally {
-    rendering = false;
-  }
-}
-
-function itmToWgs84Approx(x, y) {
+function itmToWgs84(x, y) {
   if (!window.proj4) return null;
   try {
     window.proj4.defs('EPSG:2039', '+proj=tmerc +lat_0=31.73439361111111 +lon_0=35.20451694444445 +k=1.0000067 +x_0=219529.584 +y_0=626907.39 +ellps=GRS80 +units=m +no_defs');
@@ -177,23 +136,26 @@ function setHint(text, success = false) {
   hint.classList.toggle('success', success);
 }
 
-async function addPoint() {
+function addPoint() {
   const ui = ensureOverlay();
   if (!ui) return;
   const rect = ui.wrap.getBoundingClientRect();
-  const view = await readGovMapView();
-  const center = view?.center || (view?.xmin != null ? { x: (view.xmin + view.xmax) / 2, y: (view.ymin + view.ymax) / 2 } : null);
+  const point = {
+    x: rect.width / 2,
+    y: rect.height / 2,
+    itm: null
+  };
 
-  points.push({
-    screenX: rect.width / 2,
-    screenY: rect.height / 2,
-    itm: center
-  });
-  await render();
+  points.push(point);
+  render();
   ui.wrap.classList.add('stable-point-added');
   window.setTimeout(() => ui.wrap.classList.remove('stable-point-added'), 220);
   setHint(`נוספה נקודה ${points.length}. הזיזו את המפה לפינה הבאה.`, true);
   try { navigator.vibrate?.(25); } catch {}
+
+  readCenterQuickly().then((center) => {
+    if (center && points.includes(point)) point.itm = center;
+  });
 }
 
 function clearPoints() {
@@ -209,9 +171,12 @@ function finishArea() {
     return;
   }
 
-  const latlngs = points.map((point) => point.itm ? itmToWgs84Approx(point.itm.x, point.itm.y) : null).filter(Boolean);
+  const latlngs = points.map((point) => point.itm ? itmToWgs84(point.itm.x, point.itm.y) : null).filter(Boolean);
   if (latlngs.length < 3) {
-    setHint('לא הצלחנו לקרוא את מרכז המפה. נסו להזיז מעט את המפה ולסמן שוב.');
+    setHint('הנקודות סומנו, אך נתוני המפה עדיין נטענים. המתינו רגע ולחצו שוב על סיום.');
+    points.forEach((point) => {
+      if (!point.itm) readCenterQuickly().then((center) => { if (center) point.itm = center; });
+    });
     return;
   }
 
@@ -257,6 +222,33 @@ function handleClick(event) {
   }
 }
 
+function installDragTracking() {
+  const ui = ensureOverlay();
+  if (!ui || ui.wrap.dataset.stablePolygonDrag === 'true') return;
+  ui.wrap.dataset.stablePolygonDrag = 'true';
+
+  ui.wrap.addEventListener('pointerdown', (event) => {
+    if (!points.length) return;
+    dragState = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  }, true);
+
+  ui.wrap.addEventListener('pointermove', (event) => {
+    if (!dragState || dragState.id !== event.pointerId) return;
+    const dx = event.clientX - dragState.x;
+    const dy = event.clientY - dragState.y;
+    dragState.x = event.clientX;
+    dragState.y = event.clientY;
+    points = points.map((point) => ({ ...point, x: point.x + dx, y: point.y + dy }));
+    render();
+  }, true);
+
+  const end = (event) => {
+    if (dragState?.id === event.pointerId) dragState = null;
+  };
+  ui.wrap.addEventListener('pointerup', end, true);
+  ui.wrap.addEventListener('pointercancel', end, true);
+}
+
 function injectStyles() {
   if (document.getElementById('solatrix-stable-mobile-polygon-style')) return;
   const style = document.createElement('style');
@@ -276,6 +268,7 @@ function tick() {
   if (!isMobileRoofPage()) return;
   injectStyles();
   ensureOverlay();
+  installDragTracking();
   render();
 }
 
@@ -286,5 +279,5 @@ if (!window[FLAG]) {
   else tick();
   window.addEventListener('popstate', () => window.setTimeout(tick, 120));
   window.addEventListener('resize', render);
-  window.setInterval(tick, 250);
+  window.setInterval(tick, 500);
 }
