@@ -1,4 +1,5 @@
 import './lib/govMapFetchBridge.js';
+import './govMapAddressFocusPatch.js';
 
 const PATCH_FLAG = '__solatrixMapZoomSafetyInstalledV3';
 const ESRI_IMAGERY_PART = 'World_Imagery/MapServer/tile';
