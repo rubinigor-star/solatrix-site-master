@@ -1,13 +1,7 @@
-const FLAG = '__solatrixGovMapPointRenderFixV1';
+const FLAG = '__solatrixGovMapPointRenderFixV2';
 
 function isMobileRoofMarking() {
   return location.pathname.includes('/roof-marking') && matchMedia('(max-width: 820px)').matches;
-}
-
-function diamondWkt(point, radius = 0.45) {
-  const x = Number(point.x);
-  const y = Number(point.y);
-  return `POLYGON((${x} ${y + radius},${x + radius} ${y},${x} ${y - radius},${x - radius} ${y},${x} ${y + radius}))`;
 }
 
 function lineWkt(points) {
@@ -19,71 +13,75 @@ function polygonWkt(points) {
   return `POLYGON((${ring.map((point) => `${point.x} ${point.y}`).join(',')}))`;
 }
 
-function render(points) {
+function renderOutline(points) {
   if (typeof window.govmap?.displayGeometries !== 'function') return;
   try { window.govmap.clearDrawings?.(); } catch {}
-  if (!points.length) return;
+  if (points.length < 2) return;
 
-  if (points.length >= 2) {
-    const closed = points.length >= 3;
-    window.govmap.displayGeometries({
-      wkts: [closed ? polygonWkt(points) : lineWkt(points)],
-      names: ['solatrix-roof-outline'],
-      geometryType: closed ? (window.govmap.drawType?.Polygon ?? 3) : (window.govmap.drawType?.Polyline ?? 2),
-      defaultSymbol: closed
-        ? { fillColor: [18,110,235,0.12], outlineColor: [18,110,235,1], outlineWidth: 4 }
-        : { outlineColor: [18,110,235,1], outlineWidth: 4 },
-      clearExisting: true
-    });
-  }
-
+  const closed = points.length >= 3;
   window.govmap.displayGeometries({
-    wkts: points.map((point) => diamondWkt(point)),
-    names: points.map((_, index) => `solatrix-roof-point-${index + 1}`),
-    geometryType: window.govmap.drawType?.Polygon ?? 3,
-    defaultSymbol: { fillColor: [18,110,235,1], outlineColor: [255,255,255,1], outlineWidth: 2 },
-    clearExisting: points.length < 2
+    wkts: [closed ? polygonWkt(points) : lineWkt(points)],
+    names: ['solatrix-roof-outline'],
+    geometryType: closed ? (window.govmap.drawType?.Polygon ?? 3) : (window.govmap.drawType?.Polyline ?? 2),
+    defaultSymbol: closed
+      ? { fillColor: [18,110,235,0.12], outlineColor: [18,110,235,1], outlineWidth: 4 }
+      : { outlineColor: [18,110,235,1], outlineWidth: 4 },
+    clearExisting: true
   });
+}
+
+function withoutGovMapPointRendering(callback) {
+  const display = window.govmap?.displayGeometries;
+  if (typeof display !== 'function') return callback?.();
+
+  window.govmap.displayGeometries = function filteredDisplay(options = {}) {
+    const type = Number(options.geometryType);
+    const pointType = Number(window.govmap.drawType?.Point ?? 1);
+    const containsPointWkt = Array.isArray(options.wkts) && options.wkts.some((wkt) => /^\s*POINT\s*\(/i.test(String(wkt)));
+    if (type === pointType || containsPointWkt) return undefined;
+    return display.call(window.govmap, options);
+  };
+
+  try {
+    return callback?.();
+  } finally {
+    window.govmap.displayGeometries = display;
+  }
 }
 
 function install() {
   if (!isMobileRoofMarking()) return;
   const api = window.__solatrixGovMapManual;
-  if (!api || api.__pointRenderFixed) return;
+  if (!api || api.__pointRenderFixedV2) return;
 
   const points = [];
   const originalAdd = api.addCenterPoint?.bind(api);
   const originalUndo = api.undoCenterPoint?.bind(api);
   const originalClear = api.clear?.bind(api);
-  const originalRedraw = api.redraw?.bind(api);
 
   api.addCenterPoint = () => {
-    const result = originalAdd?.();
+    const result = withoutGovMapPointRendering(() => originalAdd?.());
     if (result?.ok && result.point) points.push({ x: Number(result.point.x), y: Number(result.point.y) });
-    render(points);
+    renderOutline(points);
     return result;
   };
 
   api.undoCenterPoint = () => {
-    const result = originalUndo?.();
+    const result = withoutGovMapPointRendering(() => originalUndo?.());
     points.pop();
-    render(points);
+    renderOutline(points);
     return result;
   };
 
   api.clear = () => {
     const result = originalClear?.();
     points.length = 0;
-    render(points);
+    try { window.govmap.clearDrawings?.(); } catch {}
     return result;
   };
 
-  api.redraw = () => {
-    if (points.length) render(points);
-    else originalRedraw?.();
-  };
-
-  api.__pointRenderFixed = true;
+  api.redraw = () => renderOutline(points);
+  api.__pointRenderFixedV2 = true;
   try { window.govmap.clearDrawings?.(); } catch {}
 }
 
