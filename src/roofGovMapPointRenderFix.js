@@ -1,4 +1,4 @@
-const FLAG = '__solatrixGovMapPointRenderFixV6';
+const FLAG = '__solatrixGovMapPointRenderFixV7';
 
 function isMobileRoofMarking() {
   return location.pathname.includes('/roof-marking') && matchMedia('(max-width: 820px)').matches;
@@ -13,12 +13,12 @@ function polygonWkt(points) {
   return `POLYGON((${ring.map((point) => `${point.x} ${point.y}`).join(',')}))`;
 }
 
-function markerCrossWkts(point, radius = 1.7) {
+function markerCrossWkts(point, radius = 0.55) {
   const x = Number(point.x);
   const y = Number(point.y);
   return [
-    `LINESTRING(${x - radius} ${y},${x + radius} ${y})`,
-    `LINESTRING(${x} ${y - radius},${x} ${y + radius})`
+    `LINESTRING(${x - radius} ${y - radius},${x + radius} ${y + radius})`,
+    `LINESTRING(${x - radius} ${y + radius},${x + radius} ${y - radius})`
   ];
 }
 
@@ -50,8 +50,8 @@ function renderMarkers(points, clearExisting = false) {
     names,
     geometryType: window.govmap.drawType?.Polyline ?? 2,
     defaultSymbol: {
-      outlineColor: [18,110,235,1],
-      outlineWidth: 5
+      outlineColor: [220,38,38,1],
+      outlineWidth: 3
     },
     clearExisting
   });
@@ -115,7 +115,7 @@ function withoutGovMapPointRendering(callback) {
 function install() {
   if (!isMobileRoofMarking()) return;
   const api = window.__solatrixGovMapManual;
-  if (!api || api.__pointRenderFixedV6) return;
+  if (!api || api.__pointRenderFixedV7) return;
 
   const points = [];
   const originalAdd = api.addCenterPoint?.bind(api);
@@ -144,7 +144,7 @@ function install() {
   };
 
   api.redraw = () => points.length ? redrawReliably(points) : clearReliably();
-  api.__pointRenderFixedV6 = true;
+  api.__pointRenderFixedV7 = true;
   clearReliably();
 }
 
