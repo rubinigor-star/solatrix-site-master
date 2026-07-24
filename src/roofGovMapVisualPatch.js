@@ -13,6 +13,8 @@ let installed = false;
 let surfaces = [];
 let drawing = false;
 let lastFocusedAddress = '';
+let currentCenterItm = null;
+let manualPointsItm = [];
 
 function loadScript(src, globalCheck) {
   return new Promise((resolve, reject) => {
@@ -65,7 +67,6 @@ function classifyCoordinatePair(first, second) {
   const x = Number(first);
   const y = Number(second);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-
   if (x >= 33 && x <= 37 && y >= 28 && y <= 34) return wgs84ToItm(x, y);
   if (y >= 33 && y <= 37 && x >= 28 && x <= 34) return wgs84ToItm(y, x);
   if (x >= 100000 && x <= 350000 && y >= 350000 && y <= 850000) return { x, y };
@@ -82,11 +83,10 @@ function parsePointText(value = '') {
 }
 
 function pointFromCandidate(candidate, depth = 0, seen = new Set()) {
-  if (candidate == null || depth > 6) return null;
+  if (candidate == null || depth > 7) return null;
   if (typeof candidate === 'string') return parsePointText(candidate);
   if (typeof candidate !== 'object' || seen.has(candidate)) return null;
   seen.add(candidate);
-
   if (Array.isArray(candidate)) {
     if (candidate.length >= 2) {
       const direct = classifyCoordinatePair(candidate[0], candidate[1]);
@@ -98,10 +98,8 @@ function pointFromCandidate(candidate, depth = 0, seen = new Set()) {
     }
     return null;
   }
-
   const directPairs = [
-    [candidate.x, candidate.y],
-    [candidate.X, candidate.Y],
+    [candidate.x, candidate.y], [candidate.X, candidate.Y],
     [candidate.lon ?? candidate.lng ?? candidate.longitude, candidate.lat ?? candidate.latitude],
     [candidate.easting, candidate.northing]
   ];
@@ -109,17 +107,49 @@ function pointFromCandidate(candidate, depth = 0, seen = new Set()) {
     const direct = classifyCoordinatePair(pair[0], pair[1]);
     if (direct) return direct;
   }
-
   const preferredKeys = ['shape', 'geometry', 'coordinates', 'coordinate', 'centroid', 'center', 'point', 'location', 'data', 'result'];
   for (const key of preferredKeys) {
     if (!(key in candidate)) continue;
     const nested = pointFromCandidate(candidate[key], depth + 1, seen);
     if (nested) return nested;
   }
-
   for (const value of Object.values(candidate)) {
     const nested = pointFromCandidate(value, depth + 1, seen);
     if (nested) return nested;
+  }
+  return null;
+}
+
+function centerFromEvent(value, depth = 0, seen = new Set()) {
+  if (value == null || depth > 6) return null;
+  if (typeof value !== 'object' || seen.has(value)) return null;
+  seen.add(value);
+  const xmin = Number(value.xmin ?? value.xMin ?? value.XMin);
+  const xmax = Number(value.xmax ?? value.xMax ?? value.XMax);
+  const ymin = Number(value.ymin ?? value.yMin ?? value.YMin);
+  const ymax = Number(value.ymax ?? value.yMax ?? value.YMax);
+  if ([xmin, xmax, ymin, ymax].every(Number.isFinite)) {
+    const center = classifyCoordinatePair((xmin + xmax) / 2, (ymin + ymax) / 2);
+    if (center) return center;
+  }
+  const direct = pointFromCandidate(value);
+  if (direct) return direct;
+  for (const nested of Object.values(value)) {
+    const center = centerFromEvent(nested, depth + 1, seen);
+    if (center) return center;
+  }
+  return null;
+}
+
+function rememberMapCenter(...args) {
+  for (const arg of args) {
+    const center = centerFromEvent(arg);
+    if (center) {
+      currentCenterItm = center;
+      window.__solatrixGovMapCenterItm = { ...center };
+      window.dispatchEvent(new CustomEvent('solatrix:govmap-center-changed', { detail: center }));
+      return center;
+    }
   }
   return null;
 }
@@ -143,14 +173,7 @@ async function searchAddressOnGovMap(searchText) {
   const response = await fetch(GOVMAP_AUTOCOMPLETE_URL, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      searchText,
-      language: 'he',
-      filterType: 'address',
-      maxResults: 10,
-      isAccurate: true,
-      apiKey: GOVMAP_TOKEN
-    })
+    body: JSON.stringify({ searchText, language: 'he', filterType: 'address', maxResults: 10, isAccurate: true, apiKey: GOVMAP_TOKEN })
   });
   if (!response.ok) throw new Error(`GovMap address search failed: ${response.status}`);
   const payload = await response.json();
@@ -167,31 +190,24 @@ async function focusEnteredAddress(force = false) {
   const searchText = getAddress();
   if (!searchText || (!force && searchText === lastFocusedAddress)) return false;
   setHint('מחפשים את הכתובת וממקדים את תצלום האוויר של GovMap…');
-
   const match = await searchAddressOnGovMap(searchText);
   if (!match) {
     setHint('לא הצלחנו למצוא את הכתובת ב-GovMap. חזרו לשלב הקודם ובדקו רחוב, מספר ועיר.');
     return false;
   }
-
   lastFocusedAddress = searchText;
+  currentCenterItm = { ...match.point };
+  window.__solatrixGovMapCenterItm = { ...match.point };
   if (typeof window.govmap?.zoomToXY !== 'function') throw new Error('GovMap zoomToXY is unavailable');
-  window.govmap.zoomToXY({
-    x: match.point.x,
-    y: match.point.y,
-    level: ADDRESS_ZOOM_LEVEL,
-    marker: true
-  });
-  setHint('הכתובת נמצאה ב-GovMap. סמנו את פינות הגג על גבי תצלום האוויר.', true);
+  window.govmap.zoomToXY({ x: match.point.x, y: match.point.y, level: ADDRESS_ZOOM_LEVEL, marker: false });
+  setHint('הכתובת נמצאה. הזיזו את המפה והציבו את הכוונת על פינת הגג.', true);
   return true;
 }
 
 function parsePolygon(response) {
   const rings = response?.geometry?.rings || response?.rings || response?.data?.geometry?.rings;
   const ring = Array.isArray(rings?.[0]) ? rings[0] : [];
-  const points = ring
-    .map((pair) => Array.isArray(pair) ? itmToWgs84(pair[0], pair[1]) : null)
-    .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng));
+  const points = ring.map((pair) => Array.isArray(pair) ? itmToWgs84(pair[0], pair[1]) : null).filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng));
   if (points.length > 1) {
     const first = points[0];
     const last = points[points.length - 1];
@@ -218,6 +234,8 @@ function restore() {
     const saved = JSON.parse(localStorage.getItem(GEOMETRY_KEY) || 'null');
     if (saved?.geometry?.provider === 'govmap-official' && saved.geometry?.address === getAddress() && Array.isArray(saved.surfaces)) {
       surfaces = saved.surfaces;
+      const points = saved.surfaces[0]?.latlngs || [];
+      manualPointsItm = points.map((point) => wgs84ToItm(point.lng, point.lat));
     }
   } catch {}
 }
@@ -228,11 +246,82 @@ function renderSummary() {
   if (surfaces.length) setHint('הגג סומן ונשמר. אפשר להמשיך לשלב הבא.', true);
 }
 
+function renderManualGeometry() {
+  if (typeof window.govmap?.displayGeometries !== 'function') return;
+  try { window.govmap.clearDrawings?.(); } catch {}
+  if (!manualPointsItm.length) return;
+  const wkts = manualPointsItm.map((point) => `POINT(${point.x} ${point.y})`);
+  window.govmap.displayGeometries({
+    wkts,
+    names: wkts.map((_, index) => `roof-point-${index + 1}`),
+    geometryType: window.govmap.drawType?.Point ?? 1,
+    defaultSymbol: { fillColor: [18,110,235,1], outlineColor: [255,255,255,1], outlineWidth: 3 },
+    clearExisting: true,
+    data: { tooltips: wkts.map((_, index) => `${index + 1}`) }
+  });
+  if (manualPointsItm.length >= 2) {
+    const ring = [...manualPointsItm, manualPointsItm[0]].map((point) => `${point.x} ${point.y}`).join(',');
+    window.govmap.displayGeometries({
+      wkts: [`POLYGON((${ring}))`],
+      names: ['roof-polygon'],
+      geometryType: window.govmap.drawType?.Polygon ?? 3,
+      defaultSymbol: { fillColor: [18,110,235,0.18], outlineColor: [18,110,235,1], outlineWidth: 4 },
+      clearExisting: false
+    });
+  }
+}
+
+function syncManualSurface() {
+  if (manualPointsItm.length < 3) {
+    surfaces = [];
+    publish();
+    return;
+  }
+  const latlngs = manualPointsItm.map((point) => itmToWgs84(point.x, point.y));
+  const area = Math.max(1, polygonAreaM2(latlngs));
+  surfaces = [{ id: 1, name: 'Roof 1', area, orientation: 'South', factor: 1, source: 'govmap-center-target', points: latlngs.map((point) => `${point.lat.toFixed(7)},${point.lng.toFixed(7)}`).join(' '), latlngs }];
+  publish();
+}
+
+function addCenterPoint() {
+  const center = currentCenterItm || window.__solatrixGovMapCenterItm;
+  if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) return { ok: false, reason: 'center-unavailable' };
+  manualPointsItm.push({ x: Number(center.x), y: Number(center.y) });
+  renderManualGeometry();
+  syncManualSurface();
+  return { ok: true, count: manualPointsItm.length, point: { ...center } };
+}
+
+function undoCenterPoint() {
+  manualPointsItm.pop();
+  renderManualGeometry();
+  syncManualSurface();
+  return { ok: true, count: manualPointsItm.length };
+}
+
 function clearAll() {
   surfaces = [];
+  manualPointsItm = [];
   try { window.govmap?.clearDrawings?.(); } catch {}
   publish();
-  focusEnteredAddress(true).catch((error) => console.warn('GovMap refocus failed', error));
+}
+
+function finishCenterMarking() {
+  if (manualPointsItm.length < 3) return { ok: false, count: manualPointsItm.length };
+  syncManualSurface();
+  return { ok: true, count: manualPointsItm.length, surface: surfaces[0] };
+}
+
+function installManualApi() {
+  window.__solatrixGovMapManual = {
+    getCenter: () => currentCenterItm ? { ...currentCenterItm } : null,
+    getCount: () => manualPointsItm.length,
+    addCenterPoint,
+    undoCenterPoint,
+    clear: clearAll,
+    finish: finishCenterMarking,
+    redraw: renderManualGeometry
+  };
 }
 
 function startDraw() {
@@ -248,20 +337,9 @@ function startDraw() {
     const points = parsePolygon(response);
     if (points.length >= 3) {
       const area = Math.max(1, polygonAreaM2(points));
-      surfaces = [{
-        id: 1,
-        name: 'Roof 1',
-        area,
-        orientation: 'South',
-        factor: 1,
-        source: 'govmap-manual',
-        points: points.map((point) => `${point.lat.toFixed(7)},${point.lng.toFixed(7)}`).join(' '),
-        latlngs: points
-      }];
+      surfaces = [{ id: 1, name: 'Roof 1', area, orientation: 'South', factor: 1, source: 'govmap-manual', points: points.map((point) => `${point.lat.toFixed(7)},${point.lng.toFixed(7)}`).join(' '), latlngs: points }];
       publish();
-    } else {
-      setHint('הסימון לא הושלם. סמנו לפחות שלוש פינות של הגג.');
-    }
+    } else setHint('הסימון לא הושלם. סמנו לפחות שלוש פינות של הגג.');
     drawing = false;
   };
   if (typeof request?.progress === 'function') request.progress(onResult);
@@ -284,7 +362,7 @@ function injectStyles() {
     .solatrixGovMapHint.success{background:rgba(232,251,242,.96);color:#16734a}
     .solatrixGovMapSurfaceList{position:absolute;z-index:20;left:16px;top:16px;display:grid;gap:8px}
     .solatrixGovMapSurfaceList div{border-radius:16px;background:rgba(255,255,255,.95);padding:10px 12px;font-weight:900;box-shadow:0 10px 22px rgba(0,0,0,.14)}
-    @media(max-width:760px){.solatrixGovMapWrap{height:520px;border-radius:24px}.solatrixGovMapToolbar{right:10px;top:10px}.solatrixGovMapHint{right:10px;left:10px;bottom:10px}.solatrixGovMapSurfaceList{left:10px;top:auto;bottom:100px}}
+    @media(max-width:760px){.solatrixGovMapWrap{height:520px;border-radius:24px}.solatrixGovMapToolbar{display:none!important}.solatrixGovMapHint{right:10px;left:10px;bottom:10px}.solatrixGovMapSurfaceList{left:10px;top:auto;bottom:100px}}
   `;
   document.head.appendChild(style);
 }
@@ -293,29 +371,25 @@ async function install() {
   if (installed || !location.pathname.includes('/roof-marking')) return;
   const panel = document.querySelector('.mapPanel.interactiveMap');
   if (!panel) return;
-
   installed = true;
   panel.dataset.govmapInstalled = 'true';
   panel.dataset.mapProvider = 'govmap-official';
   injectStyles();
   restore();
-
+  installManualApi();
   if (!GOVMAP_TOKEN) {
     panel.innerHTML = '<div class="solatrixGovMapHint">GovMap API token is missing from the production build.</div>';
     throw new Error('VITE_GOVMAP_API_TOKEN is missing');
   }
-
   await Promise.all([
     loadScript(GOVMAP_SCRIPT, () => Boolean(window.govmap?.createMap)),
     loadScript(PROJ4_SCRIPT, () => Boolean(window.proj4))
   ]);
-
   panel.classList.add('solatrixMapInjected');
   panel.removeAttribute('data-action');
   panel.innerHTML = `<div class="solatrixGovMapWrap"><div id="${MAP_ID}"></div><div class="solatrixGovMapToolbar"><button class="primary" data-govmap-official="draw">סימון גג</button><button class="danger" data-govmap-official="clear">נקה הכל</button></div><div class="solatrixGovMapSurfaceList"></div><div class="solatrixGovMapHint">טוענים את תצלום האוויר הרשמי של GovMap…</div></div>`;
-  panel.querySelector('[data-govmap-official="draw"]').addEventListener('click', startDraw);
-  panel.querySelector('[data-govmap-official="clear"]').addEventListener('click', clearAll);
-
+  panel.querySelector('[data-govmap-official="draw"]')?.addEventListener('click', startDraw);
+  panel.querySelector('[data-govmap-official="clear"]')?.addEventListener('click', clearAll);
   window.govmap.createMap(MAP_ID, {
     token: GOVMAP_TOKEN,
     layers: [],
@@ -324,13 +398,15 @@ async function install() {
     isEmbeddedToggle: false,
     background: '1',
     layersMode: 1,
-    zoomButtons: true
+    zoomButtons: true,
+    onPan: (...args) => rememberMapCenter(...args),
+    onZoom: (...args) => rememberMapCenter(...args),
+    onClick: (...args) => rememberMapCenter(...args)
   });
-
   renderSummary();
   window.setTimeout(() => {
     try { window.govmap?.setBackground?.(1); } catch (error) { console.warn('GovMap background selection failed', error); }
-    focusEnteredAddress(true).catch((error) => {
+    focusEnteredAddress(true).then(() => window.setTimeout(renderManualGeometry, 500)).catch((error) => {
       console.error('GovMap address focus failed', error);
       setHint('תצלום האוויר של GovMap נטען, אך לא הצלחנו להתמקד בכתובת. בדקו את הכתובת ונסו שוב.');
     });
