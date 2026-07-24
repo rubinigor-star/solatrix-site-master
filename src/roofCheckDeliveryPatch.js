@@ -1,5 +1,5 @@
 import './govMapMobileStabilityPatch.js';
-import './govMapMobileManualPolygon.js';
+import './govMapMobilePolygonReliable.js?v=1';
 
 function blockDirectPdfOpening(event) {
   const pdfTrigger = event.target?.closest?.('[data-action="generatePdf"]');
