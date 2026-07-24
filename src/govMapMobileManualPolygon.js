@@ -1,12 +1,13 @@
 import { buildRoofGeometry, polygonAreaM2 } from './lib/roofGeometry.js';
 
-const FLAG = '__solatrixGovMapMobileManualPolygonV1';
+const FLAG = '__solatrixGovMapMobileManualPolygonV2';
 const MAP_ID = 'solatrix-official-govmap';
 const GEOMETRY_KEY = 'solatrix_roof_geometry_v1';
 const ADDRESS_KEY = 'solatrix_roof_check_address';
 
 let points = [];
-let dragState = null;
+let lastView = null;
+let rendering = false;
 
 function isMobileRoofPage() {
   const mobile = window.innerWidth <= 820 || (navigator.maxTouchPoints > 0 && window.innerWidth <= 960);
@@ -30,6 +31,7 @@ function ensureOverlay() {
     svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.classList.add('solatrixStableMobilePolygon');
     svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('preserveAspectRatio', 'none');
     wrap.appendChild(svg);
   }
 
@@ -44,28 +46,26 @@ function ensureOverlay() {
   return { wrap, svg, badge };
 }
 
-function render() {
-  const ui = ensureOverlay();
-  if (!ui) return;
-  const { svg, badge } = ui;
-  const coords = points.map((point) => `${point.x},${point.y}`).join(' ');
-  svg.innerHTML = `${points.length > 1 ? `<polyline points="${coords}"/>` : ''}${points.map((point, index) => `<circle cx="${point.x}" cy="${point.y}" r="7"/><text x="${point.x}" y="${point.y - 14}">${index + 1}</text>`).join('')}`;
-  badge.hidden = points.length === 0;
-  badge.textContent = `${points.length} נקודות`;
-
-  const done = document.querySelector('.nextTextBtn[data-action="next"]');
-  if (done) points.length >= 3 ? done.removeAttribute('disabled') : done.setAttribute('disabled', 'disabled');
+function finite(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
-function extractCenter(value, depth = 0, seen = new Set()) {
-  if (value == null || depth > 6) return null;
+function validItm(x, y) {
+  return Number.isFinite(x) && Number.isFinite(y) && x >= 100000 && x <= 350000 && y >= 350000 && y <= 850000;
+}
+
+function extractMapView(value, depth = 0, seen = new Set()) {
+  if (value == null || depth > 8) return null;
   if (typeof value !== 'object' || seen.has(value)) return null;
   seen.add(value);
 
-  if (Array.isArray(value) && value.length >= 2) {
-    const a = Number(value[0]);
-    const b = Number(value[1]);
-    if (Number.isFinite(a) && Number.isFinite(b) && a >= 100000 && a <= 350000 && b >= 350000 && b <= 850000) return { x: a, y: b };
+  const xmin = finite(value.xmin ?? value.xMin ?? value.minX ?? value.left);
+  const xmax = finite(value.xmax ?? value.xMax ?? value.maxX ?? value.right);
+  const ymin = finite(value.ymin ?? value.yMin ?? value.minY ?? value.bottom);
+  const ymax = finite(value.ymax ?? value.yMax ?? value.maxY ?? value.top);
+  if (validItm(xmin, ymin) && validItm(xmax, ymax) && xmax > xmin && ymax > ymin) {
+    return { xmin, xmax, ymin, ymax, center: { x: (xmin + xmax) / 2, y: (ymin + ymax) / 2 } };
   }
 
   const directPairs = [
@@ -75,37 +75,88 @@ function extractCenter(value, depth = 0, seen = new Set()) {
     [value.mapCenterX, value.mapCenterY]
   ];
   for (const [a, b] of directPairs) {
-    const x = Number(a);
-    const y = Number(b);
-    if (Number.isFinite(x) && Number.isFinite(y) && x >= 100000 && x <= 350000 && y >= 350000 && y <= 850000) return { x, y };
+    const x = finite(a);
+    const y = finite(b);
+    if (validItm(x, y)) return { center: { x, y } };
   }
 
-  const preferred = ['center', 'mapCenter', 'extent', 'view', 'state', 'data', 'result'];
+  if (Array.isArray(value) && value.length >= 2) {
+    const x = finite(value[0]);
+    const y = finite(value[1]);
+    if (validItm(x, y)) return { center: { x, y } };
+  }
+
+  const preferred = ['extent', 'mapExtent', 'visibleExtent', 'center', 'mapCenter', 'view', 'state', 'data', 'result'];
   for (const key of preferred) {
     if (!(key in value)) continue;
-    const nested = extractCenter(value[key], depth + 1, seen);
+    const nested = extractMapView(value[key], depth + 1, seen);
     if (nested) return nested;
   }
   for (const nestedValue of Object.values(value)) {
-    const nested = extractCenter(nestedValue, depth + 1, seen);
+    const nested = extractMapView(nestedValue, depth + 1, seen);
     if (nested) return nested;
   }
   return null;
 }
 
-async function readGovMapCenter() {
-  const candidates = ['getMapStatus', 'getMapState', 'getCenter', 'getXY'];
+async function readGovMapView() {
+  const candidates = ['getMapStatus', 'getMapState', 'getExtent', 'getCenter', 'getXY'];
   for (const name of candidates) {
     const fn = window.govmap?.[name];
     if (typeof fn !== 'function') continue;
     try {
       const result = fn.call(window.govmap);
       const resolved = typeof result?.then === 'function' ? await result : result;
-      const center = extractCenter(resolved);
-      if (center) return center;
+      const view = extractMapView(resolved);
+      if (view) {
+        if (view.xmin != null) lastView = view;
+        else if (lastView) view.extent = lastView;
+        return view;
+      }
     } catch {}
   }
-  return null;
+  return lastView;
+}
+
+function projectPoint(point, rect, view) {
+  const extent = view?.xmin != null ? view : view?.extent;
+  if (point.itm && extent?.xmax > extent?.xmin && extent?.ymax > extent?.ymin) {
+    const x = ((point.itm.x - extent.xmin) / (extent.xmax - extent.xmin)) * rect.width;
+    const y = ((extent.ymax - point.itm.y) / (extent.ymax - extent.ymin)) * rect.height;
+    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+  }
+  return { x: point.screenX ?? rect.width / 2, y: point.screenY ?? rect.height / 2 };
+}
+
+async function render() {
+  if (rendering) return;
+  rendering = true;
+  try {
+    const ui = ensureOverlay();
+    if (!ui) return;
+    const { wrap, svg, badge } = ui;
+    const rect = wrap.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${Math.max(1, rect.width)} ${Math.max(1, rect.height)}`);
+
+    const view = await readGovMapView();
+    const visible = points.map((point) => projectPoint(point, rect, view));
+    const coords = visible.map((point) => `${point.x},${point.y}`).join(' ');
+    const shape = points.length >= 3
+      ? `<polygon points="${coords}"/>`
+      : points.length > 1
+        ? `<polyline points="${coords}"/>`
+        : '';
+    const markers = visible.map((point, index) => `<circle cx="${point.x}" cy="${point.y}" r="7"/><text x="${point.x}" y="${point.y - 14}">${index + 1}</text>`).join('');
+    svg.innerHTML = `${shape}${markers}`;
+
+    badge.hidden = points.length === 0;
+    badge.textContent = `${points.length} נקודות`;
+
+    const done = document.querySelector('.nextTextBtn[data-action="next"]');
+    if (done) points.length >= 3 ? done.removeAttribute('disabled') : done.setAttribute('disabled', 'disabled');
+  } finally {
+    rendering = false;
+  }
 }
 
 function itmToWgs84Approx(x, y) {
@@ -130,17 +181,18 @@ async function addPoint() {
   const ui = ensureOverlay();
   if (!ui) return;
   const rect = ui.wrap.getBoundingClientRect();
-  const center = await readGovMapCenter();
+  const view = await readGovMapView();
+  const center = view?.center || (view?.xmin != null ? { x: (view.xmin + view.xmax) / 2, y: (view.ymin + view.ymax) / 2 } : null);
 
   points.push({
-    x: rect.width / 2,
-    y: rect.height / 2,
+    screenX: rect.width / 2,
+    screenY: rect.height / 2,
     itm: center
   });
-  render();
+  await render();
   ui.wrap.classList.add('stable-point-added');
   window.setTimeout(() => ui.wrap.classList.remove('stable-point-added'), 220);
-  setHint(`נוספה נקודה ${points.length}. הזיזו את המפה לפינה הבאה.` , true);
+  setHint(`נוספה נקודה ${points.length}. הזיזו את המפה לפינה הבאה.`, true);
   try { navigator.vibrate?.(25); } catch {}
 }
 
@@ -205,41 +257,14 @@ function handleClick(event) {
   }
 }
 
-function installDragTracking() {
-  const ui = ensureOverlay();
-  if (!ui || ui.wrap.dataset.stablePolygonDrag === 'true') return;
-  ui.wrap.dataset.stablePolygonDrag = 'true';
-
-  ui.wrap.addEventListener('pointerdown', (event) => {
-    if (!points.length) return;
-    dragState = { id: event.pointerId, x: event.clientX, y: event.clientY };
-  }, true);
-
-  ui.wrap.addEventListener('pointermove', (event) => {
-    if (!dragState || dragState.id !== event.pointerId) return;
-    const dx = event.clientX - dragState.x;
-    const dy = event.clientY - dragState.y;
-    dragState.x = event.clientX;
-    dragState.y = event.clientY;
-    points = points.map((point) => ({ ...point, x: point.x + dx, y: point.y + dy }));
-    render();
-  }, true);
-
-  const end = (event) => {
-    if (dragState?.id === event.pointerId) dragState = null;
-  };
-  ui.wrap.addEventListener('pointerup', end, true);
-  ui.wrap.addEventListener('pointercancel', end, true);
-}
-
 function injectStyles() {
   if (document.getElementById('solatrix-stable-mobile-polygon-style')) return;
   const style = document.createElement('style');
   style.id = 'solatrix-stable-mobile-polygon-style';
   style.textContent = `
-    .solatrixStableMobilePolygon{position:absolute;inset:0;z-index:24;width:100%;height:100%;pointer-events:none;overflow:visible}
-    .solatrixStableMobilePolygon polyline{fill:rgba(18,110,235,.16);stroke:#126eeb;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 2px #fff)}
-    .solatrixStableMobilePolygon circle{fill:#fff;stroke:#126eeb;stroke-width:5;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+    .solatrixStableMobilePolygon{position:absolute;inset:0;z-index:24;width:100%;height:100%;pointer-events:none;overflow:hidden}
+    .solatrixStableMobilePolygon polyline,.solatrixStableMobilePolygon polygon{fill:rgba(18,110,235,.18);stroke:#126eeb;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;filter:drop-shadow(0 1px 2px #fff)}
+    .solatrixStableMobilePolygon circle{fill:#fff;stroke:#126eeb;stroke-width:5;vector-effect:non-scaling-stroke;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
     .solatrixStableMobilePolygon text{font:900 15px Assistant,sans-serif;fill:#126eeb;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:4px}
     .solatrixStablePointBadge{position:absolute;z-index:26;left:12px;top:12px;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.95);color:#126eeb;font-weight:900;box-shadow:0 8px 18px rgba(0,0,0,.18);pointer-events:none}
     .solatrixGovMapWrap.stable-point-added .solatrixGovMapCrosshair{transform:translate(-50%,-50%) scale(1.14)}
@@ -251,7 +276,7 @@ function tick() {
   if (!isMobileRoofPage()) return;
   injectStyles();
   ensureOverlay();
-  installDragTracking();
+  render();
 }
 
 if (!window[FLAG]) {
@@ -260,5 +285,6 @@ if (!window[FLAG]) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick);
   else tick();
   window.addEventListener('popstate', () => window.setTimeout(tick, 120));
-  window.setInterval(tick, 600);
+  window.addEventListener('resize', render);
+  window.setInterval(tick, 250);
 }
