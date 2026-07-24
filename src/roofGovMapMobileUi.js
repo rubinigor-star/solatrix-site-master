@@ -1,5 +1,5 @@
-const FLAG = '__solatrixGovMapMobileUiV3';
-const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v3';
+const FLAG = '__solatrixGovMapMobileUiV4';
+const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v4';
 
 function isRoofMarkingPage() {
   return (window.location.pathname || '').includes('/roof-marking');
@@ -21,11 +21,11 @@ function injectStyles() {
       .mapScreen .drawFooter{display:none!important}
       .solatrixGovMapSurfaceList{display:none!important}
       .solatrixGovMapWrap{height:calc(100dvh - 300px)!important;min-height:410px!important;max-height:620px!important;border-radius:24px!important}
-      .solatrixGovMapCrosshair{display:block;position:absolute;z-index:60;left:50%;top:50%;width:88px;height:88px;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 3px 6px rgba(0,0,0,.34))}
-      .solatrixGovMapCrosshair:before,.solatrixGovMapCrosshair:after{content:"";position:absolute;left:50%;top:50%;background:#126eeb;border:2px solid #fff;border-radius:5px;transform:translate(-50%,-50%)}
-      .solatrixGovMapCrosshair:before{width:88px;height:5px}.solatrixGovMapCrosshair:after{width:5px;height:88px}
-      .solatrixGovMapCrosshairRing{position:absolute;left:50%;top:50%;width:40px;height:40px;transform:translate(-50%,-50%);border:5px solid #126eeb;outline:3px solid #fff;border-radius:50%;background:rgba(255,255,255,.22)}
-      .solatrixGovMapCrosshairDot{position:absolute;left:50%;top:50%;width:11px;height:11px;transform:translate(-50%,-50%);border-radius:50%;background:#126eeb;border:3px solid #fff;box-sizing:content-box}
+      .solatrixGovMapCrosshair{display:block;position:absolute;z-index:60;left:50%;top:50%;width:68px;height:68px;transform:translate(-50%,-50%);pointer-events:none;opacity:.62;filter:drop-shadow(0 2px 3px rgba(0,0,0,.18))}
+      .solatrixGovMapCrosshair:before,.solatrixGovMapCrosshair:after{content:"";position:absolute;left:50%;top:50%;background:rgba(18,110,235,.72);border:1px solid rgba(255,255,255,.9);border-radius:4px;transform:translate(-50%,-50%)}
+      .solatrixGovMapCrosshair:before{width:68px;height:3px}.solatrixGovMapCrosshair:after{width:3px;height:68px}
+      .solatrixGovMapCrosshairRing{position:absolute;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%);border:3px solid rgba(18,110,235,.78);outline:2px solid rgba(255,255,255,.92);border-radius:50%;background:rgba(255,255,255,.08)}
+      .solatrixGovMapCrosshairDot{position:absolute;left:50%;top:50%;width:7px;height:7px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(18,110,235,.9);border:2px solid rgba(255,255,255,.95);box-sizing:content-box}
       .solatrixGovMapMobileCounter{display:flex;position:absolute;z-index:61;left:12px;top:12px;align-items:center;gap:7px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.96);color:#126eeb;font:900 14px Assistant,sans-serif;box-shadow:0 8px 20px rgba(0,0,0,.16);pointer-events:none}
       .solatrixGovMapHint{right:10px!important;left:10px!important;bottom:10px!important;padding:9px 12px!important;font-size:14px!important;max-width:none!important}
       .solatrixGovMapMobileActions{display:grid;position:sticky;z-index:120;bottom:max(8px,env(safe-area-inset-bottom));grid-template-columns:1fr 1fr;gap:9px;width:calc(100% - 16px);margin:10px auto 0;padding:9px;border-radius:22px;background:rgba(255,255,255,.98);box-shadow:0 16px 42px rgba(8,29,52,.24);backdrop-filter:blur(12px);direction:rtl}
@@ -90,9 +90,9 @@ function addPoint(actions, wrap) {
 }
 
 function undoPoint(actions, wrap) {
-  window.__solatrixGovMapManual?.undoCenterPoint?.();
+  const result = window.__solatrixGovMapManual?.undoCenterPoint?.();
   updateActions(actions, wrap);
-  setHint('הנקודה האחרונה בוטלה.');
+  setHint(result?.count ? 'הנקודה האחרונה הוסרה. אפשר להמשיך מהנקודה הנוכחית.' : 'כל הנקודות הוסרו. התחילו סימון מחדש.');
 }
 
 function clearAll(actions, wrap) {
