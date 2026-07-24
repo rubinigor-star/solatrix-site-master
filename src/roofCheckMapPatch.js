@@ -1,4 +1,5 @@
 import './roofGovMapVisualPatch.js';
+import './roofMarkingHelp.js';
 
 const STYLE_ID = 'solatrix-govmap-only-guard';
 const SELECTION_KEY = 'solatrix_govmap_address_selection_v1';
