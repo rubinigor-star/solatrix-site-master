@@ -1,4 +1,4 @@
-const FLAG = '__solatrixGovMapPointRenderFixV3';
+const FLAG = '__solatrixGovMapPointRenderFixV4';
 
 function isMobileRoofMarking() {
   return location.pathname.includes('/roof-marking') && matchMedia('(max-width: 820px)').matches;
@@ -13,9 +13,26 @@ function polygonWkt(points) {
   return `POLYGON((${ring.map((point) => `${point.x} ${point.y}`).join(',')}))`;
 }
 
+function clearVisuals() {
+  try { window.govmap?.clearDrawings?.(); } catch {}
+
+  // GovMap may keep geometries created through displayGeometries even after
+  // clearDrawings(). Replace the geometry collection with an invisible,
+  // off-map line so the previous roof contour disappears immediately.
+  try {
+    window.govmap?.displayGeometries?.({
+      wkts: ['LINESTRING(0 0,0.001 0.001)'],
+      names: ['solatrix-empty-outline'],
+      geometryType: window.govmap.drawType?.Polyline ?? 2,
+      defaultSymbol: { outlineColor: [0,0,0,0], outlineWidth: 0 },
+      clearExisting: true
+    });
+  } catch {}
+}
+
 function renderOutline(points) {
   if (typeof window.govmap?.displayGeometries !== 'function') return;
-  try { window.govmap.clearDrawings?.(); } catch {}
+  clearVisuals();
   if (points.length < 2) return;
 
   const closed = points.length >= 3;
@@ -34,6 +51,13 @@ function redrawReliably(points) {
   renderOutline(points);
   setTimeout(() => renderOutline(points), 80);
   setTimeout(() => renderOutline(points), 220);
+}
+
+function clearReliably() {
+  clearVisuals();
+  setTimeout(clearVisuals, 60);
+  setTimeout(clearVisuals, 180);
+  setTimeout(clearVisuals, 420);
 }
 
 function withoutGovMapPointRendering(callback) {
@@ -58,7 +82,7 @@ function withoutGovMapPointRendering(callback) {
 function install() {
   if (!isMobileRoofMarking()) return;
   const api = window.__solatrixGovMapManual;
-  if (!api || api.__pointRenderFixedV3) return;
+  if (!api || api.__pointRenderFixedV4) return;
 
   const points = [];
   const originalAdd = api.addCenterPoint?.bind(api);
@@ -75,22 +99,20 @@ function install() {
   api.undoCenterPoint = () => {
     if (points.length) points.pop();
     const result = withoutGovMapPointRendering(() => originalUndo?.());
-    redrawReliably(points);
+    points.length ? redrawReliably(points) : clearReliably();
     return result;
   };
 
   api.clear = () => {
     points.length = 0;
     const result = originalClear?.();
-    try { window.govmap.clearDrawings?.(); } catch {}
-    setTimeout(() => { try { window.govmap.clearDrawings?.(); } catch {} }, 80);
-    setTimeout(() => { try { window.govmap.clearDrawings?.(); } catch {} }, 220);
+    clearReliably();
     return result;
   };
 
-  api.redraw = () => redrawReliably(points);
-  api.__pointRenderFixedV3 = true;
-  try { window.govmap.clearDrawings?.(); } catch {}
+  api.redraw = () => points.length ? redrawReliably(points) : clearReliably();
+  api.__pointRenderFixedV4 = true;
+  clearReliably();
 }
 
 if (!window[FLAG]) {
