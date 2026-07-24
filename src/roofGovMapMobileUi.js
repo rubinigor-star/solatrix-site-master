@@ -1,5 +1,7 @@
-const FLAG = '__solatrixGovMapMobileUiV4';
-const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v4';
+const FLAG = '__solatrixGovMapMobileUiV5';
+const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v5';
+
+let initialMapRevealDone = false;
 
 function isRoofMarkingPage() {
   return (window.location.pathname || '').includes('/roof-marking');
@@ -16,11 +18,12 @@ function injectStyles() {
   style.textContent = `
     .solatrixGovMapCrosshair,.solatrixGovMapMobileActions,.solatrixGovMapMobileCounter{display:none}
     @media(max-width:820px){
+      body{padding-bottom:230px!important}
       .solatrixGovMapToolbar{display:none!important}
       .mapScreen .markStatus{display:none!important}
       .mapScreen .drawFooter{display:none!important}
       .solatrixGovMapSurfaceList{display:none!important}
-      .solatrixGovMapWrap{height:calc(100dvh - 300px)!important;min-height:410px!important;max-height:620px!important;border-radius:24px!important}
+      .solatrixGovMapWrap{height:calc(100dvh - 205px)!important;min-height:390px!important;max-height:610px!important;border-radius:24px!important;scroll-margin-top:78px}
       .solatrixGovMapCrosshair{display:block;position:absolute;z-index:60;left:50%;top:50%;width:68px;height:68px;transform:translate(-50%,-50%);pointer-events:none;opacity:.62;filter:drop-shadow(0 2px 3px rgba(0,0,0,.18))}
       .solatrixGovMapCrosshair:before,.solatrixGovMapCrosshair:after{content:"";position:absolute;left:50%;top:50%;background:rgba(18,110,235,.72);border:1px solid rgba(255,255,255,.9);border-radius:4px;transform:translate(-50%,-50%)}
       .solatrixGovMapCrosshair:before{width:68px;height:3px}.solatrixGovMapCrosshair:after{width:3px;height:68px}
@@ -28,8 +31,8 @@ function injectStyles() {
       .solatrixGovMapCrosshairDot{position:absolute;left:50%;top:50%;width:7px;height:7px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(18,110,235,.9);border:2px solid rgba(255,255,255,.95);box-sizing:content-box}
       .solatrixGovMapMobileCounter{display:flex;position:absolute;z-index:61;left:12px;top:12px;align-items:center;gap:7px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.96);color:#126eeb;font:900 14px Assistant,sans-serif;box-shadow:0 8px 20px rgba(0,0,0,.16);pointer-events:none}
       .solatrixGovMapHint{right:10px!important;left:10px!important;bottom:10px!important;padding:9px 12px!important;font-size:14px!important;max-width:none!important}
-      .solatrixGovMapMobileActions{display:grid;position:sticky;z-index:120;bottom:max(8px,env(safe-area-inset-bottom));grid-template-columns:1fr 1fr;gap:9px;width:calc(100% - 16px);margin:10px auto 0;padding:9px;border-radius:22px;background:rgba(255,255,255,.98);box-shadow:0 16px 42px rgba(8,29,52,.24);backdrop-filter:blur(12px);direction:rtl}
-      .solatrixGovMapMobileActions button{min-height:54px;border-radius:17px;border:0;font:900 16px Assistant,sans-serif;cursor:pointer}
+      .solatrixGovMapMobileActions{display:grid;position:fixed;z-index:100000;left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));grid-template-columns:1fr 1fr;gap:8px;margin:0;padding:9px;border-radius:22px;background:rgba(255,255,255,.98);box-shadow:0 16px 42px rgba(8,29,52,.28);backdrop-filter:blur(14px);direction:rtl}
+      .solatrixGovMapMobileActions button{min-height:50px;border-radius:16px;border:0;font:900 16px Assistant,sans-serif;cursor:pointer}
       .solatrixGovMapMobileActions .add{grid-column:1/-1;background:linear-gradient(135deg,#f5a11a,#ffbd55);color:#17100a;font-size:19px;padding:0 22px}
       .solatrixGovMapMobileActions .undo{background:#fff;color:#17334f;border:1px solid rgba(23,51,79,.16)}
       .solatrixGovMapMobileActions .clear{background:#fff;color:#a52020;border:1px solid rgba(165,32,32,.18)}
@@ -116,7 +119,7 @@ function finish(actions, wrap) {
 }
 
 function ensureActions(panel, wrap) {
-  let actions = panel.parentElement?.querySelector('.solatrixGovMapMobileActions');
+  let actions = document.querySelector('.solatrixGovMapMobileActions');
   if (!actions) {
     actions = document.createElement('div');
     actions.className = 'solatrixGovMapMobileActions';
@@ -125,13 +128,22 @@ function ensureActions(panel, wrap) {
       <button type="button" class="undo" disabled>בטל נקודה אחרונה</button>
       <button type="button" class="clear">נקה הכל</button>
       <button type="button" class="finish" disabled>סיים סימון</button>`;
-    panel.insertAdjacentElement('afterend', actions);
+    document.body.appendChild(actions);
     actions.querySelector('.add')?.addEventListener('click', () => addPoint(actions, wrap));
     actions.querySelector('.undo')?.addEventListener('click', () => undoPoint(actions, wrap));
     actions.querySelector('.clear')?.addEventListener('click', () => clearAll(actions, wrap));
     actions.querySelector('.finish')?.addEventListener('click', () => finish(actions, wrap));
   }
   updateActions(actions, wrap);
+}
+
+function revealMapImmediately(wrap) {
+  if (initialMapRevealDone) return;
+  initialMapRevealDone = true;
+  window.setTimeout(() => {
+    const top = wrap.getBoundingClientRect().top + window.scrollY - 78;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }, 500);
 }
 
 function removeLegacyControls(panel) {
@@ -148,6 +160,7 @@ function tick() {
   ensureCrosshair(wrap);
   ensureCounter(wrap);
   ensureActions(panel, wrap);
+  revealMapImmediately(wrap);
 }
 
 if (!window[FLAG]) {
