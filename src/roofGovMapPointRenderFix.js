@@ -1,4 +1,4 @@
-const FLAG = '__solatrixGovMapPointRenderFixV4';
+const FLAG = '__solatrixGovMapPointRenderFixV5';
 
 function isMobileRoofMarking() {
   return location.pathname.includes('/roof-marking') && matchMedia('(max-width: 820px)').matches;
@@ -13,12 +13,18 @@ function polygonWkt(points) {
   return `POLYGON((${ring.map((point) => `${point.x} ${point.y}`).join(',')}))`;
 }
 
+function markerWkt(point, radius = 0.7) {
+  const steps = 12;
+  const ring = [];
+  for (let index = 0; index <= steps; index += 1) {
+    const angle = (Math.PI * 2 * index) / steps;
+    ring.push(`${point.x + Math.cos(angle) * radius} ${point.y + Math.sin(angle) * radius}`);
+  }
+  return `POLYGON((${ring.join(',')}))`;
+}
+
 function clearVisuals() {
   try { window.govmap?.clearDrawings?.(); } catch {}
-
-  // GovMap may keep geometries created through displayGeometries even after
-  // clearDrawings(). Replace the geometry collection with an invisible,
-  // off-map line so the previous roof contour disappears immediately.
   try {
     window.govmap?.displayGeometries?.({
       wkts: ['LINESTRING(0 0,0.001 0.001)'],
@@ -30,10 +36,30 @@ function clearVisuals() {
   } catch {}
 }
 
+function renderMarkers(points, clearExisting = false) {
+  if (!points.length || typeof window.govmap?.displayGeometries !== 'function') return;
+  window.govmap.displayGeometries({
+    wkts: points.map((point) => markerWkt(point)),
+    names: points.map((_, index) => `solatrix-roof-marker-${index + 1}`),
+    geometryType: window.govmap.drawType?.Polygon ?? 3,
+    defaultSymbol: {
+      fillColor: [18,110,235,0.88],
+      outlineColor: [255,255,255,0.96],
+      outlineWidth: 2
+    },
+    clearExisting
+  });
+}
+
 function renderOutline(points) {
   if (typeof window.govmap?.displayGeometries !== 'function') return;
   clearVisuals();
-  if (points.length < 2) return;
+  if (!points.length) return;
+
+  if (points.length === 1) {
+    renderMarkers(points, true);
+    return;
+  }
 
   const closed = points.length >= 3;
   window.govmap.displayGeometries({
@@ -45,6 +71,7 @@ function renderOutline(points) {
       : { outlineColor: [18,110,235,0.9], outlineWidth: 3 },
     clearExisting: true
   });
+  renderMarkers(points, false);
 }
 
 function redrawReliably(points) {
@@ -82,7 +109,7 @@ function withoutGovMapPointRendering(callback) {
 function install() {
   if (!isMobileRoofMarking()) return;
   const api = window.__solatrixGovMapManual;
-  if (!api || api.__pointRenderFixedV4) return;
+  if (!api || api.__pointRenderFixedV5) return;
 
   const points = [];
   const originalAdd = api.addCenterPoint?.bind(api);
@@ -111,7 +138,7 @@ function install() {
   };
 
   api.redraw = () => points.length ? redrawReliably(points) : clearReliably();
-  api.__pointRenderFixedV4 = true;
+  api.__pointRenderFixedV5 = true;
   clearReliably();
 }
 
