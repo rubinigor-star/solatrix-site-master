@@ -3,16 +3,20 @@ import { buildRoofGeometry, polygonAreaM2 } from './lib/roofGeometry.js';
 const GOVMAP_SCRIPT = 'https://www.govmap.gov.il/govmap/api/govmap.api.js';
 const PROJ4_SCRIPT = 'https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js';
 const GOVMAP_AUTOCOMPLETE_URL = 'https://www.govmap.gov.il/api/search-service/autocomplete';
-const GOVMAP_TOKEN = String(import.meta.env.VITE_GOVMAP_API_TOKEN || '').trim();
+const GOVMAP_TOKEN = String(window.__SOLATRIX_CONFIG__?.govMapApiToken || import.meta.env.VITE_GOVMAP_API_TOKEN || '').trim();
 const GEOMETRY_KEY = 'solatrix_roof_geometry_v1';
 const ADDRESS_KEY = 'solatrix_roof_check_address';
 const MAP_ID = 'solatrix-official-govmap';
-const ADDRESS_ZOOM_LEVEL = 11;
+const ADDRESS_ZOOM_LEVEL = 12;
 
 let installed = false;
 let surfaces = [];
 let drawing = false;
 let lastFocusedAddress = '';
+
+function isMobile() {
+  return window.innerWidth <= 820 || (navigator.maxTouchPoints > 0 && window.innerWidth <= 960);
+}
 
 function loadScript(src, globalCheck) {
   return new Promise((resolve, reject) => {
@@ -65,7 +69,6 @@ function classifyCoordinatePair(first, second) {
   const x = Number(first);
   const y = Number(second);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-
   if (x >= 33 && x <= 37 && y >= 28 && y <= 34) return wgs84ToItm(x, y);
   if (y >= 33 && y <= 37 && x >= 28 && x <= 34) return wgs84ToItm(y, x);
   if (x >= 100000 && x <= 350000 && y >= 350000 && y <= 850000) return { x, y };
@@ -116,7 +119,6 @@ function pointFromCandidate(candidate, depth = 0, seen = new Set()) {
     const nested = pointFromCandidate(candidate[key], depth + 1, seen);
     if (nested) return nested;
   }
-
   for (const value of Object.values(candidate)) {
     const nested = pointFromCandidate(value, depth + 1, seen);
     if (nested) return nested;
@@ -138,19 +140,22 @@ function setHint(text, success = false) {
   hint.classList.toggle('success', success);
 }
 
+function pointFromPreviouslySelectedAddress(searchText) {
+  const selected = window.__solatrixGovMapLastAddress;
+  const selectedText = String(selected?.display_name || '').trim();
+  if (!selected || (selectedText && searchText && !selectedText.includes(searchText) && !searchText.includes(selectedText))) return null;
+  return pointFromCandidate(selected);
+}
+
 async function searchAddressOnGovMap(searchText) {
+  const selectedPoint = pointFromPreviouslySelectedAddress(searchText);
+  if (selectedPoint) return { point: selectedPoint, result: window.__solatrixGovMapLastAddress };
   if (!GOVMAP_TOKEN) throw new Error('GovMap token is missing from the production build');
+
   const response = await fetch(GOVMAP_AUTOCOMPLETE_URL, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      searchText,
-      language: 'he',
-      filterType: 'address',
-      maxResults: 10,
-      isAccurate: true,
-      apiKey: GOVMAP_TOKEN
-    })
+    body: JSON.stringify({ searchText, language: 'he', filterType: 'address', maxResults: 15, isAccurate: true, apiKey: GOVMAP_TOKEN })
   });
   if (!response.ok) throw new Error(`GovMap address search failed: ${response.status}`);
   const payload = await response.json();
@@ -163,35 +168,33 @@ async function searchAddressOnGovMap(searchText) {
   return fallbackPoint ? { point: fallbackPoint, result: payload } : null;
 }
 
+function zoomToAddress(point) {
+  if (typeof window.govmap?.zoomToXY !== 'function') throw new Error('GovMap zoomToXY is unavailable');
+  const zoom = () => window.govmap.zoomToXY({ x: point.x, y: point.y, level: ADDRESS_ZOOM_LEVEL, marker: true });
+  zoom();
+  window.setTimeout(zoom, 550);
+  window.setTimeout(zoom, 1300);
+}
+
 async function focusEnteredAddress(force = false) {
   const searchText = getAddress();
   if (!searchText || (!force && searchText === lastFocusedAddress)) return false;
   setHint('מחפשים את הכתובת וממקדים את תצלום האוויר של GovMap…');
-
   const match = await searchAddressOnGovMap(searchText);
   if (!match) {
     setHint('לא הצלחנו למצוא את הכתובת ב-GovMap. חזרו לשלב הקודם ובדקו רחוב, מספר ועיר.');
     return false;
   }
-
   lastFocusedAddress = searchText;
-  if (typeof window.govmap?.zoomToXY !== 'function') throw new Error('GovMap zoomToXY is unavailable');
-  window.govmap.zoomToXY({
-    x: match.point.x,
-    y: match.point.y,
-    level: ADDRESS_ZOOM_LEVEL,
-    marker: true
-  });
-  setHint('הכתובת נמצאה ב-GovMap. סמנו את פינות הגג על גבי תצלום האוויר.', true);
+  zoomToAddress(match.point);
+  setHint('הכתובת נמצאה. הזיזו את המפה והשתמשו בכוונת כדי לסמן את פינות הגג.', true);
   return true;
 }
 
 function parsePolygon(response) {
   const rings = response?.geometry?.rings || response?.rings || response?.data?.geometry?.rings;
   const ring = Array.isArray(rings?.[0]) ? rings[0] : [];
-  const points = ring
-    .map((pair) => Array.isArray(pair) ? itmToWgs84(pair[0], pair[1]) : null)
-    .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng));
+  const points = ring.map((pair) => Array.isArray(pair) ? itmToWgs84(pair[0], pair[1]) : null).filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng));
   if (points.length > 1) {
     const first = points[0];
     const last = points[points.length - 1];
@@ -216,9 +219,7 @@ function publish() {
 function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(GEOMETRY_KEY) || 'null');
-    if (saved?.geometry?.provider === 'govmap-official' && saved.geometry?.address === getAddress() && Array.isArray(saved.surfaces)) {
-      surfaces = saved.surfaces;
-    }
+    if (saved?.geometry?.provider === 'govmap-official' && saved.geometry?.address === getAddress() && Array.isArray(saved.surfaces)) surfaces = saved.surfaces;
   } catch {}
 }
 
@@ -235,38 +236,34 @@ function clearAll() {
   focusEnteredAddress(true).catch((error) => console.warn('GovMap refocus failed', error));
 }
 
+function setDrawingUi(active) {
+  drawing = active;
+  document.querySelector('.solatrixGovMapWrap')?.classList.toggle('isDrawing', active);
+}
+
 function startDraw() {
   if (drawing || typeof window.govmap?.draw !== 'function') {
     setHint('כלי הסימון של GovMap עדיין נטען. נסו שוב בעוד רגע.');
     return;
   }
-  drawing = true;
-  setHint('לחצו על פינות הגג. לחיצה כפולה מסיימת את הסימון.');
+  setDrawingUi(true);
+  setHint('הכוונת מסמנת את מרכז העבודה. לחצו על פינות הגג ולחיצה כפולה תסיים את הסימון.');
   const drawType = window.govmap.drawType?.Polygon ?? 3;
   const request = window.govmap.draw(drawType);
   const onResult = (response) => {
     const points = parsePolygon(response);
     if (points.length >= 3) {
       const area = Math.max(1, polygonAreaM2(points));
-      surfaces = [{
-        id: 1,
-        name: 'Roof 1',
-        area,
-        orientation: 'South',
-        factor: 1,
-        source: 'govmap-manual',
-        points: points.map((point) => `${point.lat.toFixed(7)},${point.lng.toFixed(7)}`).join(' '),
-        latlngs: points
-      }];
+      surfaces = [{ id: 1, name: 'Roof 1', area, orientation: 'South', factor: 1, source: 'govmap-manual', points: points.map((point) => `${point.lat.toFixed(7)},${point.lng.toFixed(7)}`).join(' '), latlngs: points }];
       publish();
     } else {
       setHint('הסימון לא הושלם. סמנו לפחות שלוש פינות של הגג.');
     }
-    drawing = false;
+    setDrawingUi(false);
   };
   if (typeof request?.progress === 'function') request.progress(onResult);
-  else if (typeof request?.then === 'function') request.then(onResult).catch((error) => { drawing = false; console.warn('GovMap drawing failed', error); });
-  else drawing = false;
+  else if (typeof request?.then === 'function') request.then(onResult).catch((error) => { setDrawingUi(false); console.warn('GovMap drawing failed', error); });
+  else setDrawingUi(false);
 }
 
 function injectStyles() {
@@ -284,6 +281,11 @@ function injectStyles() {
     .solatrixGovMapHint.success{background:rgba(232,251,242,.96);color:#16734a}
     .solatrixGovMapSurfaceList{position:absolute;z-index:20;left:16px;top:16px;display:grid;gap:8px}
     .solatrixGovMapSurfaceList div{border-radius:16px;background:rgba(255,255,255,.95);padding:10px 12px;font-weight:900;box-shadow:0 10px 22px rgba(0,0,0,.14)}
+    .solatrixGovMapCrosshair{position:absolute;z-index:25;left:50%;top:50%;width:76px;height:76px;transform:translate(-50%,-50%);pointer-events:none;display:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
+    .solatrixGovMapWrap.isDrawing .solatrixGovMapCrosshair{display:block}
+    .solatrixGovMapCrosshair:before{content:"";position:absolute;left:25px;top:25px;width:22px;height:22px;border:3px solid #126eeb;border-radius:50%;box-shadow:0 0 0 2px #fff}
+    .solatrixGovMapCrosshair:after{content:"";position:absolute;left:37px;top:3px;width:3px;height:70px;background:linear-gradient(to bottom,#126eeb 0 20px,transparent 20px 50px,#126eeb 50px 70px);box-shadow:0 0 0 1px rgba(255,255,255,.8)}
+    .solatrixGovMapCrosshair i{position:absolute;left:3px;top:37px;width:70px;height:3px;background:linear-gradient(to right,#126eeb 0 20px,transparent 20px 50px,#126eeb 50px 70px);box-shadow:0 0 0 1px rgba(255,255,255,.8)}
     @media(max-width:760px){.solatrixGovMapWrap{height:520px;border-radius:24px}.solatrixGovMapToolbar{right:10px;top:10px}.solatrixGovMapHint{right:10px;left:10px;bottom:10px}.solatrixGovMapSurfaceList{left:10px;top:auto;bottom:100px}}
   `;
   document.head.appendChild(style);
@@ -293,7 +295,6 @@ async function install() {
   if (installed || !location.pathname.includes('/roof-marking')) return;
   const panel = document.querySelector('.mapPanel.interactiveMap');
   if (!panel) return;
-
   installed = true;
   panel.dataset.govmapInstalled = 'true';
   panel.dataset.mapProvider = 'govmap-official';
@@ -312,21 +313,11 @@ async function install() {
 
   panel.classList.add('solatrixMapInjected');
   panel.removeAttribute('data-action');
-  panel.innerHTML = `<div class="solatrixGovMapWrap"><div id="${MAP_ID}"></div><div class="solatrixGovMapToolbar"><button class="primary" data-govmap-official="draw">סימון גג</button><button class="danger" data-govmap-official="clear">נקה הכל</button></div><div class="solatrixGovMapSurfaceList"></div><div class="solatrixGovMapHint">טוענים את תצלום האוויר הרשמי של GovMap…</div></div>`;
+  panel.innerHTML = `<div class="solatrixGovMapWrap"><div id="${MAP_ID}"></div><div class="solatrixGovMapToolbar"><button class="primary" data-govmap-official="draw">סימון גג</button><button class="danger" data-govmap-official="clear">נקה הכל</button></div><div class="solatrixGovMapSurfaceList"></div><div class="solatrixGovMapCrosshair" aria-hidden="true"><i></i></div><div class="solatrixGovMapHint">טוענים את תצלום האוויר הרשמי של GovMap…</div></div>`;
   panel.querySelector('[data-govmap-official="draw"]').addEventListener('click', startDraw);
   panel.querySelector('[data-govmap-official="clear"]').addEventListener('click', clearAll);
 
-  window.govmap.createMap(MAP_ID, {
-    token: GOVMAP_TOKEN,
-    layers: [],
-    showXY: false,
-    identifyOnClick: false,
-    isEmbeddedToggle: false,
-    background: '1',
-    layersMode: 1,
-    zoomButtons: true
-  });
-
+  window.govmap.createMap(MAP_ID, { token: GOVMAP_TOKEN, layers: [], showXY: false, identifyOnClick: false, isEmbeddedToggle: false, background: '1', layersMode: 1, zoomButtons: true });
   renderSummary();
   window.setTimeout(() => {
     try { window.govmap?.setBackground?.(1); } catch (error) { console.warn('GovMap background selection failed', error); }
@@ -334,7 +325,7 @@ async function install() {
       console.error('GovMap address focus failed', error);
       setHint('תצלום האוויר של GovMap נטען, אך לא הצלחנו להתמקד בכתובת. בדקו את הכתובת ונסו שוב.');
     });
-  }, 1400);
+  }, isMobile() ? 1800 : 1400);
 }
 
 function tick() {
