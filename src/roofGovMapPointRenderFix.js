@@ -1,4 +1,4 @@
-const FLAG = '__solatrixGovMapPointRenderFixV2';
+const FLAG = '__solatrixGovMapPointRenderFixV3';
 
 function isMobileRoofMarking() {
   return location.pathname.includes('/roof-marking') && matchMedia('(max-width: 820px)').matches;
@@ -24,10 +24,16 @@ function renderOutline(points) {
     names: ['solatrix-roof-outline'],
     geometryType: closed ? (window.govmap.drawType?.Polygon ?? 3) : (window.govmap.drawType?.Polyline ?? 2),
     defaultSymbol: closed
-      ? { fillColor: [18,110,235,0.12], outlineColor: [18,110,235,1], outlineWidth: 4 }
-      : { outlineColor: [18,110,235,1], outlineWidth: 4 },
+      ? { fillColor: [18,110,235,0.08], outlineColor: [18,110,235,0.9], outlineWidth: 3 }
+      : { outlineColor: [18,110,235,0.9], outlineWidth: 3 },
     clearExisting: true
   });
+}
+
+function redrawReliably(points) {
+  renderOutline(points);
+  setTimeout(() => renderOutline(points), 80);
+  setTimeout(() => renderOutline(points), 220);
 }
 
 function withoutGovMapPointRendering(callback) {
@@ -52,7 +58,7 @@ function withoutGovMapPointRendering(callback) {
 function install() {
   if (!isMobileRoofMarking()) return;
   const api = window.__solatrixGovMapManual;
-  if (!api || api.__pointRenderFixedV2) return;
+  if (!api || api.__pointRenderFixedV3) return;
 
   const points = [];
   const originalAdd = api.addCenterPoint?.bind(api);
@@ -62,26 +68,28 @@ function install() {
   api.addCenterPoint = () => {
     const result = withoutGovMapPointRendering(() => originalAdd?.());
     if (result?.ok && result.point) points.push({ x: Number(result.point.x), y: Number(result.point.y) });
-    renderOutline(points);
+    redrawReliably(points);
     return result;
   };
 
   api.undoCenterPoint = () => {
+    if (points.length) points.pop();
     const result = withoutGovMapPointRendering(() => originalUndo?.());
-    points.pop();
-    renderOutline(points);
+    redrawReliably(points);
     return result;
   };
 
   api.clear = () => {
-    const result = originalClear?.();
     points.length = 0;
+    const result = originalClear?.();
     try { window.govmap.clearDrawings?.(); } catch {}
+    setTimeout(() => { try { window.govmap.clearDrawings?.(); } catch {} }, 80);
+    setTimeout(() => { try { window.govmap.clearDrawings?.(); } catch {} }, 220);
     return result;
   };
 
-  api.redraw = () => renderOutline(points);
-  api.__pointRenderFixedV2 = true;
+  api.redraw = () => redrawReliably(points);
+  api.__pointRenderFixedV3 = true;
   try { window.govmap.clearDrawings?.(); } catch {}
 }
 
