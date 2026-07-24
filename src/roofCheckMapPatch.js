@@ -1,4 +1,5 @@
 import './roofGovMapVisualPatch.js';
+import './roofGovMapPointRenderFix.js';
 import './roofMarkingHelp.js';
 import './roofGovMapMobileUi.js';
 
