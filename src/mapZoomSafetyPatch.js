@@ -2,6 +2,7 @@ import './lib/govMapFetchBridge.js';
 import './govMapAddressFocusPatch.js';
 import './govMapApprovedControlsPatch.js';
 import './govMapCrosshairPointBridge.js';
+import './govMapResponsiveStabilityPatch.js';
 
 const PATCH_FLAG = '__solatrixMapZoomSafetyInstalledV3';
 const ESRI_IMAGERY_PART = 'World_Imagery/MapServer/tile';
