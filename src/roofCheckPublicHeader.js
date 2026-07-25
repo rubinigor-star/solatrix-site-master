@@ -81,7 +81,16 @@ function addHeaderStyles() {
     .quickContactBar,
     .quick-contact-bar{display:none !important}
 
-    @media(max-width:980px){.siteHeader.calculatorPublicHeader .headerInner{width:min(100% - 28px,1180px);min-height:72px}.siteHeader.calculatorPublicHeader .desktopNav{display:none}.siteHeader.calculatorPublicHeader .menuBtn{display:grid}.siteHeader.calculatorPublicHeader .logoMark{width:150px;height:58px}.siteHeader.calculatorPublicHeader .logoImage{width:146px;max-height:54px}.siteHeader.calculatorPublicHeader .headerCta{padding:11px 16px}.siteHeader.calculatorPublicHeader .waIcon{width:21px;height:21px;flex-basis:21px}}
+    @media(max-width:980px){
+      .siteHeader.calculatorPublicHeader .headerInner{width:min(100% - 28px,1180px);min-height:72px}
+      .siteHeader.calculatorPublicHeader .desktopNav{display:none}
+      .siteHeader.calculatorPublicHeader .menuBtn{display:grid}
+      .siteHeader.calculatorPublicHeader .logoMark{width:150px;height:58px}
+      .siteHeader.calculatorPublicHeader .logoImage{width:146px;max-height:54px}
+      .siteHeader.calculatorPublicHeader .headerCta{width:46px;height:46px;min-width:46px;flex:0 0 46px;padding:0;gap:0;border-radius:50%;box-shadow:0 10px 24px rgba(37,211,102,.25)}
+      .siteHeader.calculatorPublicHeader .headerCta span{display:none}
+      .siteHeader.calculatorPublicHeader .headerCta .waIcon{width:25px;height:25px;flex:0 0 25px}
+    }
   `;
   document.head.appendChild(style);
 }
@@ -103,7 +112,7 @@ function replaceCalculatorHeader() {
       </a>
       <nav class="desktopNav" aria-label="ניווט ראשי">${publicNav.map(navLink).join('')}</nav>
       <div class="headerActions">
-        <a class="headerCta" href="https://wa.me/${PHONE}" target="_blank" rel="noreferrer">${WHATSAPP_ICON}<span>וואטסאפ</span></a>
+        <a class="headerCta" href="https://wa.me/${PHONE}" target="_blank" rel="noreferrer" aria-label="WhatsApp">${WHATSAPP_ICON}<span>וואטסאפ</span></a>
         <button class="menuBtn" type="button" aria-label="Menu">☰</button>
       </div>
     </div>
