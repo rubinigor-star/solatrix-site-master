@@ -31,3 +31,40 @@
   .solatrixLeadWide{grid-column:auto}
   .solatrixLeadPanel h2{padding-inline-start:44px}
 }
+
+/* Compact mobile WhatsApp control in the public site header. */
+@media (max-width:980px){
+  header .nav-cta[href*="wa.me"],
+  .topbar .nav-cta[href*="wa.me"],
+  .site-header .nav-cta[href*="wa.me"]{
+    width:48px!important;
+    height:48px!important;
+    min-width:48px!important;
+    max-width:48px!important;
+    flex:0 0 48px!important;
+    padding:0!important;
+    gap:0!important;
+    border-radius:50%!important;
+    display:inline-flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    overflow:hidden!important;
+    font-size:0!important;
+    line-height:0!important;
+    background:#25D366!important;
+    color:#fff!important;
+    box-shadow:0 10px 24px rgba(37,211,102,.28)!important;
+  }
+  header .nav-cta[href*="wa.me"] span,
+  .topbar .nav-cta[href*="wa.me"] span,
+  .site-header .nav-cta[href*="wa.me"] span{display:none!important}
+  header .nav-cta[href*="wa.me"] .wa-icon,
+  .topbar .nav-cta[href*="wa.me"] .wa-icon,
+  .site-header .nav-cta[href*="wa.me"] .wa-icon{
+    width:27px!important;
+    height:27px!important;
+    flex:0 0 27px!important;
+    display:block!important;
+    margin:0!important;
+  }
+}
