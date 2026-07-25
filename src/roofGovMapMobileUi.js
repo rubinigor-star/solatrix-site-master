@@ -1,5 +1,5 @@
-const FLAG = '__solatrixGovMapMobileUiV7';
-const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v7';
+const FLAG = '__solatrixGovMapMobileUiV8';
+const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v8';
 
 let initialMapRevealDone = false;
 
@@ -112,6 +112,21 @@ function cleanupMobileUi() {
   initialMapRevealDone = false;
 }
 
+function navigateToObstacles() {
+  const next = document.querySelector('.nextTextBtn[data-action="next"]');
+  if (next) {
+    next.removeAttribute('disabled');
+    next.click();
+  }
+
+  window.setTimeout(() => {
+    if (!isRoofMarkingPage()) return;
+    cleanupMobileUi();
+    window.history.pushState({ step: 4 }, '', '/obstacles');
+    window.dispatchEvent(new PopStateEvent('popstate', { state: { step: 4 } }));
+  }, 120);
+}
+
 function finish(actions, wrap) {
   if (actions.classList.contains('is-finishing')) return;
   const result = window.__solatrixGovMapManual?.finish?.();
@@ -126,20 +141,7 @@ function finish(actions, wrap) {
   if (finishButton) finishButton.textContent = 'שומרים וממשיכים…';
   setHint('הגג סומן ונשמר. עוברים לשלב הבא…', true);
 
-  const next = document.querySelector('.nextTextBtn[data-action="next"]');
-  next?.removeAttribute('disabled');
-
-  window.setTimeout(() => {
-    const currentNext = document.querySelector('.nextTextBtn[data-action="next"]');
-    if (currentNext) {
-      cleanupMobileUi();
-      currentNext.click();
-      return;
-    }
-    cleanupMobileUi();
-    window.history.pushState({ step: 4 }, '', '/obstacles');
-    window.dispatchEvent(new PopStateEvent('popstate', { state: { step: 4 } }));
-  }, 350);
+  navigateToObstacles();
 }
 
 function ensureActions(panel, wrap) {
