@@ -1,5 +1,5 @@
-const FLAG = '__solatrixGovMapMobileUiV6';
-const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v6';
+const FLAG = '__solatrixGovMapMobileUiV7';
+const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v7';
 
 let initialMapRevealDone = false;
 
@@ -38,6 +38,8 @@ function injectStyles() {
       .solatrixGovMapMobileActions .clear{background:#fff;color:#a52020;border:1px solid rgba(165,32,32,.18)}
       .solatrixGovMapMobileActions .finish{grid-column:1/-1;background:#092b4c;color:#fff;font-size:18px}
       .solatrixGovMapMobileActions .finish[disabled],.solatrixGovMapMobileActions .undo[disabled]{opacity:.38;cursor:not-allowed}
+      .solatrixGovMapMobileActions.is-finishing button{pointer-events:none;opacity:.55}
+      .solatrixGovMapMobileActions.is-finishing .finish{opacity:1}
     }
   `;
   document.head.appendChild(style);
@@ -104,18 +106,40 @@ function clearAll(actions, wrap) {
   setHint('הסימון נוקה. הזיזו את המפה והציבו את הכוונת על פינת הגג.');
 }
 
+function cleanupMobileUi() {
+  document.querySelector('.solatrixGovMapMobileActions')?.remove();
+  document.body.style.removeProperty('padding-bottom');
+  initialMapRevealDone = false;
+}
+
 function finish(actions, wrap) {
+  if (actions.classList.contains('is-finishing')) return;
   const result = window.__solatrixGovMapManual?.finish?.();
   if (!result?.ok) {
     setHint('צריך לסמן לפחות שלוש פינות של הגג.');
     updateActions(actions, wrap);
     return;
   }
-  updateActions(actions, wrap);
-  setHint('הגג סומן ונשמר. אפשר להמשיך.', true);
+
+  actions.classList.add('is-finishing');
+  const finishButton = actions.querySelector('.finish');
+  if (finishButton) finishButton.textContent = 'שומרים וממשיכים…';
+  setHint('הגג סומן ונשמר. עוברים לשלב הבא…', true);
+
   const next = document.querySelector('.nextTextBtn[data-action="next"]');
   next?.removeAttribute('disabled');
-  next?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+
+  window.setTimeout(() => {
+    const currentNext = document.querySelector('.nextTextBtn[data-action="next"]');
+    if (currentNext) {
+      cleanupMobileUi();
+      currentNext.click();
+      return;
+    }
+    cleanupMobileUi();
+    window.history.pushState({ step: 4 }, '', '/obstacles');
+    window.dispatchEvent(new PopStateEvent('popstate', { state: { step: 4 } }));
+  }, 350);
 }
 
 function ensureActions(panel, wrap) {
@@ -151,7 +175,10 @@ function removeLegacyControls(panel) {
 }
 
 function tick() {
-  if (!isRoofMarkingPage() || !isMobile()) return;
+  if (!isRoofMarkingPage() || !isMobile()) {
+    cleanupMobileUi();
+    return;
+  }
   injectStyles();
   const panel = document.querySelector('.mapPanel.interactiveMap[data-govmap-installed="true"]');
   const wrap = panel?.querySelector('.solatrixGovMapWrap');
