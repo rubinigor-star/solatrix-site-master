@@ -1,8 +1,9 @@
 const GOVMAP_SCRIPT = 'https://www.govmap.gov.il/govmap/api/govmap.api.js';
+const PROJ4_SCRIPT = 'https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js';
 const GOVMAP_TOKEN = String(import.meta.env.VITE_GOVMAP_API_TOKEN || '').trim();
 const GEOMETRY_KEY = 'solatrix_roof_geometry_v1';
 const MAP_ID = 'solatrix-obstacles-govmap';
-const STYLE_ID = 'solatrix-obstacles-govmap-style';
+const STYLE_ID = 'solatrix-obstacles-govmap-style-v2';
 
 let installing = false;
 let installedPanel = null;
@@ -11,17 +12,17 @@ function isObstaclesPage() {
   return (location.pathname || '').includes('/obstacles');
 }
 
-function loadGovMap() {
+function loadScript(src, ready) {
   return new Promise((resolve, reject) => {
-    if (window.govmap?.createMap) return resolve();
-    const existing = document.querySelector(`script[src="${GOVMAP_SCRIPT}"]`);
+    if (ready()) return resolve();
+    const existing = document.querySelector(`script[src="${src}"]`);
     if (existing) {
       existing.addEventListener('load', resolve, { once: true });
       existing.addEventListener('error', reject, { once: true });
       return;
     }
     const script = document.createElement('script');
-    script.src = GOVMAP_SCRIPT;
+    script.src = src;
     script.defer = true;
     script.onload = resolve;
     script.onerror = reject;
@@ -34,8 +35,7 @@ function readSavedGeometry() {
     const saved = JSON.parse(localStorage.getItem(GEOMETRY_KEY) || 'null');
     const surface = saved?.surfaces?.[0];
     const latlngs = Array.isArray(surface?.latlngs) ? surface.latlngs : [];
-    const geometry = saved?.geometry || null;
-    return { surface, latlngs, geometry };
+    return { surface, latlngs, geometry: saved?.geometry || null };
   } catch {
     return { surface: null, latlngs: [], geometry: null };
   }
@@ -54,22 +54,48 @@ function injectStyles() {
   document.head.appendChild(style);
 }
 
-function polygonWktFromLatLngs(latlngs) {
-  const itmPoints = [];
-  const proj4 = window.proj4;
-  if (!proj4) return null;
-  try {
-    proj4.defs('EPSG:2039', '+proj=tmerc +lat_0=31.73439361111111 +lon_0=35.20451694444445 +k=1.0000067 +x_0=219529.584 +y_0=626907.39 +ellps=GRS80 +units=m +no_defs');
-    for (const point of latlngs) {
-      const [x, y] = proj4('EPSG:4326', 'EPSG:2039', [Number(point.lng), Number(point.lat)]);
-      if (Number.isFinite(x) && Number.isFinite(y)) itmPoints.push({ x, y });
-    }
-  } catch {
-    return null;
+function defineProjection() {
+  window.proj4.defs('EPSG:2039', '+proj=tmerc +lat_0=31.73439361111111 +lon_0=35.20451694444445 +k=1.0000067 +x_0=219529.584 +y_0=626907.39 +ellps=GRS80 +units=m +no_defs');
+}
+
+function toItm(point) {
+  const lat = Number(point?.lat);
+  const lng = Number(point?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || !window.proj4) return null;
+  const [x, y] = window.proj4('EPSG:4326', 'EPSG:2039', [lng, lat]);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+function savedRoofShape(latlngs, geometry) {
+  const points = latlngs.map(toItm).filter(Boolean);
+  if (points.length >= 3) {
+    const ring = [...points, points[0]].map((point) => `${point.x} ${point.y}`).join(',');
+    const center = points.reduce((sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length }), { x: 0, y: 0 });
+    return { wkt: `POLYGON((${ring}))`, center };
   }
-  if (itmPoints.length < 3) return null;
-  const ring = [...itmPoints, itmPoints[0]].map((point) => `${point.x} ${point.y}`).join(',');
-  return { wkt: `POLYGON((${ring}))`, center: itmPoints.reduce((acc, point) => ({ x: acc.x + point.x / itmPoints.length, y: acc.y + point.y / itmPoints.length }), { x: 0, y: 0 }) };
+
+  const centroid = geometry?.centroid;
+  const converted = toItm(centroid);
+  if (converted) return { wkt: null, center: converted };
+  if (Number.isFinite(centroid?.x) && Number.isFinite(centroid?.y)) return { wkt: null, center: { x: Number(centroid.x), y: Number(centroid.y) } };
+  return { wkt: null, center: null };
+}
+
+function showSavedRoof(shape) {
+  if (!shape?.center) return;
+  try {
+    window.govmap?.zoomToXY?.({ x: shape.center.x, y: shape.center.y, level: 12, marker: false });
+  } catch {}
+  if (!shape.wkt) return;
+  try {
+    window.govmap?.displayGeometries?.({
+      wkts: [shape.wkt],
+      names: ['solatrix-marked-roof-obstacles'],
+      geometryType: window.govmap.drawType?.Polygon ?? 3,
+      defaultSymbol: { fillColor: [18,110,235,0.10], outlineColor: [18,110,235,1], outlineWidth: 2 },
+      clearExisting: true
+    });
+  } catch {}
 }
 
 async function install() {
@@ -79,10 +105,15 @@ async function install() {
   installing = true;
   try {
     if (!GOVMAP_TOKEN) throw new Error('VITE_GOVMAP_API_TOKEN is missing');
-    await loadGovMap();
+    await Promise.all([
+      loadScript(GOVMAP_SCRIPT, () => Boolean(window.govmap?.createMap)),
+      loadScript(PROJ4_SCRIPT, () => Boolean(window.proj4))
+    ]);
+    defineProjection();
     injectStyles();
 
     const { latlngs, geometry } = readSavedGeometry();
+    const shape = savedRoofShape(latlngs, geometry);
     panel.removeAttribute('data-action');
     panel.dataset.obstaclesGovmap = 'true';
     panel.innerHTML = `<div class="solatrixObstaclesGovMapWrap"><div id="${MAP_ID}"></div><div class="solatrixObstaclesGovMapBadge">הגג שסומן</div></div>`;
@@ -99,28 +130,10 @@ async function install() {
       zoomButtons: true
     });
 
-    window.setTimeout(() => {
+    [700, 1300, 2200].forEach((delay) => window.setTimeout(() => {
       try { window.govmap?.setBackground?.(1); } catch {}
-      const polygon = polygonWktFromLatLngs(latlngs);
-      const fallback = geometry?.centroid;
-      const center = polygon?.center || (fallback && Number.isFinite(fallback.x) && Number.isFinite(fallback.y) ? fallback : null);
-      if (center) {
-        try { window.govmap?.zoomToXY?.({ x: center.x, y: center.y, level: 12, marker: false }); } catch {}
-      }
-      if (polygon?.wkt) {
-        window.setTimeout(() => {
-          try {
-            window.govmap?.displayGeometries?.({
-              wkts: [polygon.wkt],
-              names: ['solatrix-marked-roof-obstacles'],
-              geometryType: window.govmap.drawType?.Polygon ?? 3,
-              defaultSymbol: { fillColor: [18,110,235,0.10], outlineColor: [18,110,235,1], outlineWidth: 2 },
-              clearExisting: true
-            });
-          } catch {}
-        }, 500);
-      }
-    }, 1200);
+      showSavedRoof(shape);
+    }, delay));
   } catch (error) {
     console.error('Obstacles GovMap install failed', error);
     if (panel) panel.innerHTML = '<div style="padding:24px;font-weight:800">לא הצלחנו לטעון את מפת הגג. חזרו שלב אחד ונסו שוב.</div>';
