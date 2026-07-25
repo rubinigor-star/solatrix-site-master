@@ -19,6 +19,14 @@ function houseNumber(value = '') {
   return normalize(value).match(/\b\d+[א-תA-Za-z]?\b/)?.[0] || '';
 }
 
+function hasHebrew(value = '') {
+  return /[\u0590-\u05FF]/.test(String(value));
+}
+
+function hasLatin(value = '') {
+  return /[A-Za-z]/.test(String(value));
+}
+
 function collectResults(payload, depth = 0, seen = new Set()) {
   if (payload == null || depth > 5) return [];
   if (Array.isArray(payload)) return payload;
@@ -45,36 +53,61 @@ function firstText(...values) {
   return values.map((value) => typeof value === 'string' || typeof value === 'number' ? normalize(value) : '').find(Boolean) || '';
 }
 
+function firstHebrewText(...values) {
+  const texts = values
+    .map((value) => typeof value === 'string' || typeof value === 'number' ? normalize(value) : '')
+    .filter(Boolean);
+  return texts.find((value) => hasHebrew(value)) || texts[0] || '';
+}
+
+function compactSecondary(primary, secondary) {
+  const normalizedPrimary = normalize(primary).toLocaleLowerCase('he');
+  const normalizedSecondary = normalize(secondary);
+  if (!normalizedSecondary) return '';
+  if (normalizedPrimary.includes(normalizedSecondary.toLocaleLowerCase('he'))) return '';
+  if (hasHebrew(primary) && hasLatin(normalizedSecondary) && !hasHebrew(normalizedSecondary)) return '';
+  return normalizedSecondary;
+}
+
 function labelFromResult(result, fallback = '') {
-  const primary = firstText(
+  const data = result?.data || {};
+  const primary = firstHebrewText(
+    result?.addressHebrew,
+    result?.hebrewAddress,
     result?.text,
     result?.caption,
-    result?.display_name,
     result?.displayName,
     result?.originalText,
+    result?.address,
     result?.title,
     result?.name,
-    result?.address,
-    result?.data?.text,
-    result?.data?.caption,
-    result?.data?.displayName,
-    result?.data?.address,
-    result?.data?.name
+    data?.addressHebrew,
+    data?.hebrewAddress,
+    data?.text,
+    data?.caption,
+    data?.displayName,
+    data?.address,
+    data?.name
   );
-  const secondary = firstText(
+  const secondaryRaw = firstHebrewText(
+    result?.cityHebrew,
+    result?.settlementHebrew,
     result?.subtext,
-    result?.description,
     result?.city,
     result?.locality,
     result?.settlement,
-    result?.data?.subtext,
-    result?.data?.description,
-    result?.data?.city,
-    result?.data?.locality,
-    result?.data?.settlement,
-    result?.data?.יישוב
+    result?.description,
+    data?.cityHebrew,
+    data?.settlementHebrew,
+    data?.subtext,
+    data?.city,
+    data?.locality,
+    data?.settlement,
+    data?.יישוב,
+    data?.description
   );
-  return { primary: primary || fallback, secondary };
+  const resolvedPrimary = primary || fallback;
+  return { primary: resolvedPrimary, secondary: compactSecondary(resolvedPrimary, secondaryRaw) };
 }
 
 function uniqueSuggestions(results, query) {
@@ -82,6 +115,7 @@ function uniqueSuggestions(results, query) {
   return results
     .map((result) => ({ result, ...labelFromResult(result, query) }))
     .filter((item) => item.primary)
+    .sort((a, b) => Number(hasHebrew(b.primary)) - Number(hasHebrew(a.primary)))
     .filter((item) => {
       const key = `${item.primary}|${item.secondary}`.toLocaleLowerCase('he');
       if (seen.has(key)) return false;
@@ -96,22 +130,18 @@ function queryVariants(query) {
   const variants = [normalized];
   const withoutComma = normalized.replace(/,/g, ' ');
   if (withoutComma !== normalized) variants.push(normalize(withoutComma));
-  const number = houseNumber(normalized);
-  if (number) {
-    const noNumber = normalize(normalized.replace(new RegExp(`\\b${number}\\b`), ''));
-    if (noNumber && noNumber !== normalized) variants.push(noNumber);
-  }
   return [...new Set(variants.filter(Boolean))];
 }
 
-async function requestGovMap(searchText, signal, mode = 'minimal') {
-  const body = { searchText };
-  if (mode === 'extended') {
-    body.language = 'he';
-    body.maxResults = 15;
-    body.isAccurate = true;
-    if (GOVMAP_TOKEN) body.apiKey = GOVMAP_TOKEN;
-  }
+async function requestGovMap(searchText, signal) {
+  const body = {
+    searchText,
+    language: 'he',
+    filterType: 'address',
+    maxResults: 15,
+    isAccurate: true
+  };
+  if (GOVMAP_TOKEN) body.apiKey = GOVMAP_TOKEN;
 
   const response = await fetch(GOVMAP_AUTOCOMPLETE_URL, {
     method: 'POST',
@@ -128,7 +158,9 @@ function installAutocomplete() {
   if (!input || input.dataset.govMapAutocompleteInstalled === 'true') return;
   input.dataset.govMapAutocompleteInstalled = 'true';
   input.dataset.addressAutocomplete = 'true';
-  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('autocomplete', 'street-address');
+  input.setAttribute('lang', 'he');
+  input.setAttribute('dir', 'rtl');
   input.setAttribute('role', 'combobox');
   input.setAttribute('aria-autocomplete', 'list');
   input.setAttribute('aria-expanded', 'false');
@@ -146,7 +178,7 @@ function installAutocomplete() {
 
   const note = document.createElement('small');
   note.className = 'roofAddressAutocompleteNote';
-  note.textContent = 'הקלידו רחוב, מספר ועיר. אפשר לבחור תוצאה מ-GovMap או להמשיך עם הכתובת שהוקלדה.';
+  note.textContent = 'הקלידו כתובת בעברית: רחוב, מספר ועיר. בחרו תוצאה רשמית של GovMap.';
   host.appendChild(note);
 
   input.addEventListener('input', () => {
@@ -161,7 +193,7 @@ function installAutocomplete() {
     const query = streetQuery(input.value);
     if (query.length < MIN_QUERY_LENGTH) {
       closeSuggestions(input, list, host);
-      note.textContent = 'הקלידו רחוב, מספר ועיר לקבלת תוצאות מדויקות.';
+      note.textContent = 'הקלידו לפחות 3 תווים בעברית לקבלת כתובות רשמיות.';
       return;
     }
     searchTimer = window.setTimeout(() => searchGovMapAddresses({ input, list, note, host, query }), DEBOUNCE_MS);
@@ -174,15 +206,13 @@ function installAutocomplete() {
 async function searchGovMapAddresses({ input, list, note, host, query }) {
   requestController?.abort();
   requestController = new AbortController();
-  note.textContent = 'מחפשים את הכתובת ב-GovMap…';
+  note.textContent = 'מחפשים כתובת רשמית ב-GovMap…';
 
   try {
     const merged = [];
     for (const variant of queryVariants(query)) {
       if (requestController.signal.aborted) return;
-      let results = await requestGovMap(variant, requestController.signal, 'minimal');
-      if (!results.length) results = await requestGovMap(variant, requestController.signal, 'extended');
-      merged.push(...results);
+      merged.push(...await requestGovMap(variant, requestController.signal));
       if (uniqueSuggestions(merged, query).length >= 6) break;
     }
     renderSuggestions({ input, list, note, host, suggestions: uniqueSuggestions(merged, query), query });
@@ -220,10 +250,10 @@ function renderSuggestions({ input, list, note, host, suggestions, query, apiFai
   input.setAttribute('aria-expanded', 'true');
   input.dataset.manualAddressAllowed = 'true';
   note.textContent = suggestions.length
-    ? 'בחרו תוצאה של GovMap. אם הכתובת אינה מופיעה, המשיכו עם הטקסט שהוקלד.'
+    ? 'בחרו כתובת רשמית של GovMap. התוצאות מוצגות בעברית בלבד ככל שהמידע הרשמי מאפשר.'
     : apiFailed
       ? 'GovMap לא החזיר הצעות כרגע. אפשר להמשיך עם הכתובת המלאה והמפה תחפש אותה שוב.'
-      : 'לא נמצאה הצעה מדויקת. אפשר להמשיך עם הכתובת המלאה והמפה תחפש אותה שוב.';
+      : 'לא נמצאה כתובת רשמית מדויקת. בדקו רחוב, מספר ועיר.';
 }
 
 function chooseSuggestion(input, list, note, host, suggestion) {
@@ -238,7 +268,7 @@ function chooseSuggestion(input, list, note, host, suggestion) {
   input.dataset.manualAddressAllowed = 'true';
   input.dispatchEvent(new Event('change', { bubbles: true }));
   closeSuggestions(input, list, host);
-  note.textContent = 'הכתובת נבחרה ב-GovMap והנקודה תועבר למפה.';
+  note.textContent = 'הכתובת הרשמית נבחרה ב-GovMap והמיקום המדויק יועבר למפה.';
   input.focus();
 }
 
