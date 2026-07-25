@@ -42,7 +42,58 @@ function injectGlobalCleanupStyles() {
       visibility:hidden !important;
       pointer-events:none !important;
     }
-    @media(max-width:980px){body{padding-bottom:0 !important;}}
+    @media(max-width:980px){
+      body{padding-bottom:0 !important;}
+
+      header a[href*="wa.me"],
+      .topbar a[href*="wa.me"],
+      .site-header a[href*="wa.me"],
+      .navbar a[href*="wa.me"],
+      .siteHeader a[href*="wa.me"]{
+        width:48px !important;
+        height:48px !important;
+        min-width:48px !important;
+        max-width:48px !important;
+        flex:0 0 48px !important;
+        padding:0 !important;
+        margin:0 !important;
+        gap:0 !important;
+        border-radius:50% !important;
+        display:inline-flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+        background:#25D366 !important;
+        color:#fff !important;
+        border:0 !important;
+        box-shadow:0 10px 24px rgba(37,211,102,.25) !important;
+        overflow:hidden !important;
+        font-size:0 !important;
+        line-height:0 !important;
+      }
+
+      header a[href*="wa.me"] > span,
+      .topbar a[href*="wa.me"] > span,
+      .site-header a[href*="wa.me"] > span,
+      .navbar a[href*="wa.me"] > span,
+      .siteHeader a[href*="wa.me"] > span{
+        display:none !important;
+      }
+
+      header a[href*="wa.me"] svg,
+      .topbar a[href*="wa.me"] svg,
+      .site-header a[href*="wa.me"] svg,
+      .navbar a[href*="wa.me"] svg,
+      .siteHeader a[href*="wa.me"] svg{
+        width:27px !important;
+        height:27px !important;
+        min-width:27px !important;
+        max-width:27px !important;
+        flex:0 0 27px !important;
+        display:block !important;
+        margin:0 !important;
+        color:#fff !important;
+      }
+    }
   `;
   document.head.appendChild(style);
 }
