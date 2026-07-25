@@ -1,4 +1,4 @@
-const FLAG = '__solatrixGovMapPointRenderFixV8';
+const FLAG = '__solatrixGovMapPointRenderFixV9';
 
 function isMobileRoofMarking() {
   return location.pathname.includes('/roof-marking') && matchMedia('(max-width: 820px)').matches;
@@ -47,7 +47,7 @@ function renderFirstPoint(point) {
   });
 }
 
-function renderOutline(points) {
+function renderGeometry(points, finished = false) {
   if (typeof window.govmap?.displayGeometries !== 'function') return;
   clearVisuals();
   if (!points.length) return;
@@ -57,22 +57,24 @@ function renderOutline(points) {
     return;
   }
 
-  const closed = points.length >= 3;
+  const shouldClose = finished && points.length >= 3;
   window.govmap.displayGeometries({
-    wkts: [closed ? polygonWkt(points) : lineWkt(points)],
-    names: ['solatrix-roof-outline'],
-    geometryType: closed ? (window.govmap.drawType?.Polygon ?? 3) : (window.govmap.drawType?.Polyline ?? 2),
-    defaultSymbol: closed
-      ? { fillColor: [18,110,235,0.08], outlineColor: [18,110,235,0.9], outlineWidth: 3 }
-      : { outlineColor: [18,110,235,0.9], outlineWidth: 3 },
+    wkts: [shouldClose ? polygonWkt(points) : lineWkt(points)],
+    names: [shouldClose ? 'solatrix-roof-area' : 'solatrix-roof-open-outline'],
+    geometryType: shouldClose
+      ? (window.govmap.drawType?.Polygon ?? 3)
+      : (window.govmap.drawType?.Polyline ?? 2),
+    defaultSymbol: shouldClose
+      ? { fillColor: [18,110,235,0.10], outlineColor: [18,110,235,0.95], outlineWidth: 3 }
+      : { outlineColor: [18,110,235,0.95], outlineWidth: 3 },
     clearExisting: true
   });
 }
 
-function redrawReliably(points) {
-  renderOutline(points);
-  setTimeout(() => renderOutline(points), 100);
-  setTimeout(() => renderOutline(points), 300);
+function redrawReliably(points, finished = false) {
+  renderGeometry(points, finished);
+  setTimeout(() => renderGeometry(points, finished), 100);
+  setTimeout(() => renderGeometry(points, finished), 300);
 }
 
 function clearReliably() {
@@ -104,36 +106,57 @@ function withoutGovMapPointRendering(callback) {
 function install() {
   if (!isMobileRoofMarking()) return;
   const api = window.__solatrixGovMapManual;
-  if (!api || api.__pointRenderFixedV8) return;
+  if (!api || api.__pointRenderFixedV9) return;
 
   const points = [];
+  let finished = false;
   const originalAdd = api.addCenterPoint?.bind(api);
   const originalUndo = api.undoCenterPoint?.bind(api);
   const originalClear = api.clear?.bind(api);
+  const originalFinish = api.finish?.bind(api);
 
   api.addCenterPoint = () => {
+    finished = false;
     const result = withoutGovMapPointRendering(() => originalAdd?.());
     if (result?.ok && result.point) points.push({ x: Number(result.point.x), y: Number(result.point.y) });
-    redrawReliably(points);
+    redrawReliably(points, false);
+    const next = document.querySelector('.nextTextBtn[data-action="next"]');
+    next?.setAttribute('disabled', 'disabled');
     return result;
   };
 
   api.undoCenterPoint = () => {
+    finished = false;
     if (points.length) points.pop();
     const result = withoutGovMapPointRendering(() => originalUndo?.());
-    points.length ? redrawReliably(points) : clearReliably();
+    points.length ? redrawReliably(points, false) : clearReliably();
+    const next = document.querySelector('.nextTextBtn[data-action="next"]');
+    next?.setAttribute('disabled', 'disabled');
     return result;
   };
 
   api.clear = () => {
+    finished = false;
     points.length = 0;
     const result = originalClear?.();
     clearReliably();
+    const next = document.querySelector('.nextTextBtn[data-action="next"]');
+    next?.setAttribute('disabled', 'disabled');
     return result;
   };
 
-  api.redraw = () => points.length ? redrawReliably(points) : clearReliably();
-  api.__pointRenderFixedV8 = true;
+  api.finish = () => {
+    const result = originalFinish?.();
+    if (!result?.ok || points.length < 3) return result;
+    finished = true;
+    redrawReliably(points, true);
+    const next = document.querySelector('.nextTextBtn[data-action="next"]');
+    next?.removeAttribute('disabled');
+    return result;
+  };
+
+  api.redraw = () => points.length ? redrawReliably(points, finished) : clearReliably();
+  api.__pointRenderFixedV9 = true;
   clearReliably();
 }
 
