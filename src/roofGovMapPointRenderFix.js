@@ -1,4 +1,4 @@
-const FLAG = '__solatrixGovMapPointRenderFixV9';
+const FLAG = '__solatrixGovMapPointRenderFixV10';
 
 function isMobileRoofMarking() {
   return location.pathname.includes('/roof-marking') && matchMedia('(max-width: 820px)').matches;
@@ -13,7 +13,7 @@ function polygonWkt(points) {
   return `POLYGON((${ring.map((point) => `${point.x} ${point.y}`).join(',')}))`;
 }
 
-function firstPointWkt(point, radius = 0.35) {
+function firstPointWkt(point, radius = 0.28) {
   const x = Number(point.x);
   const y = Number(point.y);
   return `POLYGON((${x} ${y + radius},${x + radius} ${y},${x} ${y - radius},${x - radius} ${y},${x} ${y + radius}))`;
@@ -40,7 +40,7 @@ function renderFirstPoint(point) {
     geometryType: window.govmap.drawType?.Polygon ?? 3,
     defaultSymbol: {
       fillColor: [220,38,38,0.95],
-      outlineColor: [255,255,255,0.95],
+      outlineColor: [220,38,38,1],
       outlineWidth: 1
     },
     clearExisting: true
@@ -65,8 +65,8 @@ function renderGeometry(points, finished = false) {
       ? (window.govmap.drawType?.Polygon ?? 3)
       : (window.govmap.drawType?.Polyline ?? 2),
     defaultSymbol: shouldClose
-      ? { fillColor: [18,110,235,0.10], outlineColor: [18,110,235,0.95], outlineWidth: 3 }
-      : { outlineColor: [18,110,235,0.95], outlineWidth: 3 },
+      ? { fillColor: [18,110,235,0.08], outlineColor: [18,110,235,1], outlineWidth: 2 }
+      : { outlineColor: [18,110,235,1], outlineWidth: 1 },
     clearExisting: true
   });
 }
@@ -106,7 +106,7 @@ function withoutGovMapPointRendering(callback) {
 function install() {
   if (!isMobileRoofMarking()) return;
   const api = window.__solatrixGovMapManual;
-  if (!api || api.__pointRenderFixedV9) return;
+  if (!api || api.__pointRenderFixedV10) return;
 
   const points = [];
   let finished = false;
@@ -156,7 +156,7 @@ function install() {
   };
 
   api.redraw = () => points.length ? redrawReliably(points, finished) : clearReliably();
-  api.__pointRenderFixedV9 = true;
+  api.__pointRenderFixedV10 = true;
   clearReliably();
 }
 
