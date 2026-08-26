@@ -1,0 +1,64 @@
+name: Publish native Hebrew preview
+
+on:
+  push:
+    branches:
+      - 'preview/native-hebrew-localization'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Hebrew preview branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build preview
+        env:
+          VITE_GOVMAP_API_TOKEN: ${{ secrets.VITE_GOVMAP_API_TOKEN }}
+        run: npm run build
+
+      - name: Inject native Hebrew copy layer
+        run: |
+          set -euo pipefail
+          cp src/nativeHebrewCopy.js dist/nativeHebrewCopy.js
+          python - <<'PY'
+          from pathlib import Path
+          for p in Path('dist').rglob('*.html'):
+              if p.name == 'admin.html':
+                  continue
+              html = p.read_text(encoding='utf-8')
+              script = '<script type="module" src="/nativeHebrewCopy.js"></script>'
+              if script not in html:
+                  html = html.replace('</body>', script + '\n</body>')
+              p.write_text(html, encoding='utf-8')
+          PY
+
+      - name: Publish static Hebrew preview branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/solatrix-native-hebrew-static
+          mkdir -p /tmp/solatrix-native-hebrew-static
+          cp -R dist/. /tmp/solatrix-native-hebrew-static/
+          cd /tmp/solatrix-native-hebrew-static
+          git init
+          git checkout -b preview-native-hebrew-static
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          touch .nojekyll
+          git add -A
+          git commit -m "Publish native Hebrew preview ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin preview-native-hebrew-static
