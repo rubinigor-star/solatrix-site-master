@@ -3,7 +3,7 @@ const PROJ4_SCRIPT = 'https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js';
 const GOVMAP_TOKEN = String(import.meta.env.VITE_GOVMAP_API_TOKEN || '').trim();
 const GEOMETRY_KEY = 'solatrix_roof_geometry_v1';
 const MAP_ID = 'solatrix-obstacles-govmap';
-const STYLE_ID = 'solatrix-obstacles-govmap-style-v4';
+const STYLE_ID = 'solatrix-obstacles-govmap-style-v5';
 const LIFECYCLE_FLAG = '__solatrixGovMapLifecycleV1';
 
 let installing = false;
@@ -15,7 +15,6 @@ function isObstaclesPage() {
 
 function loadScript(src, ready, timeoutMs = 10000) {
   if (ready()) return Promise.resolve();
-
   let script = document.querySelector(`script[src="${src}"]`);
   if (!script) {
     script = document.createElement('script');
@@ -23,12 +22,10 @@ function loadScript(src, ready, timeoutMs = 10000) {
     script.defer = true;
     document.head.appendChild(script);
   }
-
   return new Promise((resolve, reject) => {
     let finished = false;
     const startedAt = Date.now();
     let timer = 0;
-
     const finish = (callback, value) => {
       if (finished) return;
       finished = true;
@@ -36,17 +33,13 @@ function loadScript(src, ready, timeoutMs = 10000) {
       script.removeEventListener('error', onError);
       callback(value);
     };
-
     const onError = () => finish(reject, new Error(`Failed to load ${src}`));
     const probe = () => {
       if (finished) return;
       if (ready()) return finish(resolve);
-      if (Date.now() - startedAt >= timeoutMs) {
-        return finish(reject, new Error(`Timed out waiting for ${src}`));
-      }
+      if (Date.now() - startedAt >= timeoutMs) return finish(reject, new Error(`Timed out waiting for ${src}`));
       timer = window.setTimeout(probe, 80);
     };
-
     script.addEventListener('error', onError, { once: true });
     timer = window.setTimeout(probe, 0);
   });
@@ -102,13 +95,10 @@ function savedRoofShape(latlngs, geometry) {
     const center = points.reduce((sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length }), { x: 0, y: 0 });
     return { wkt: `POLYGON((${ring}))`, center };
   }
-
   const centroid = geometry?.centroid;
   const converted = toItm(centroid);
   if (converted) return { wkt: null, center: converted };
-  if (Number.isFinite(centroid?.x) && Number.isFinite(centroid?.y)) {
-    return { wkt: null, center: { x: Number(centroid.x), y: Number(centroid.y) } };
-  }
+  if (Number.isFinite(centroid?.x) && Number.isFinite(centroid?.y)) return { wkt: null, center: { x: Number(centroid.x), y: Number(centroid.y) } };
   return { wkt: null, center: null };
 }
 
@@ -136,7 +126,7 @@ function renderSavedRoof(shape, { focus = false, clearExisting = false } = {}) {
 }
 
 function scheduleRoofRender(shape, { focusFirst = false } = {}) {
-  const delays = [0, 120, 300, 650, 1100, 1800, 2800];
+  const delays = [500, 1000, 1800, 2800];
   delays.forEach((delay, index) => {
     window.setTimeout(() => {
       if (!isObstaclesPage()) return;
@@ -154,7 +144,7 @@ function ensureBadge(wrap) {
   wrap.appendChild(badge);
 }
 
-function reuseLiveMap(panel, shape) {
+function reuseLiveMap(panel) {
   const lifecycle = window[LIFECYCLE_FLAG];
   const wrap = lifecycle?.take?.();
   if (!wrap || !wrap.querySelector('#solatrix-official-govmap')) return false;
@@ -168,7 +158,16 @@ function reuseLiveMap(panel, shape) {
   panel.appendChild(wrap);
   installedPanel = panel;
 
-  window.requestAnimationFrame(() => scheduleRoofRender(shape, { focusFirst: false }));
+  // Critical: the live GovMap already contains the points/polygon drawn on the
+  // marking step. Do not call clearDrawings/displayGeometries here. Earlier
+  // versions cleared the valid live drawing and then relied on a redraw that
+  // GovMap does not reliably accept immediately after DOM re-parenting.
+  window.requestAnimationFrame(() => {
+    try { window.dispatchEvent(new Event('resize')); } catch {}
+  });
+  window.setTimeout(() => {
+    try { window.dispatchEvent(new Event('resize')); } catch {}
+  }, 350);
   return true;
 }
 
@@ -196,7 +195,6 @@ async function createFreshMap(panel, shape) {
     layersMode: 1,
     zoomButtons: true
   });
-
   scheduleRoofRender(shape, { focusFirst: true });
 }
 
@@ -209,17 +207,13 @@ async function install() {
     injectStyles();
     if (!window.proj4) await loadScript(PROJ4_SCRIPT, () => Boolean(window.proj4));
     defineProjection();
-
     const { latlngs, geometry } = readSavedGeometry();
     const shape = savedRoofShape(latlngs, geometry);
-
-    if (reuseLiveMap(panel, shape)) return;
+    if (reuseLiveMap(panel)) return;
     await createFreshMap(panel, shape);
   } catch (error) {
     console.error('Obstacles GovMap install failed', error);
-    if (panel) {
-      panel.innerHTML = '<div style="padding:24px;font-weight:800">לא הצלחנו לטעון את מפת הגג. חזרו שלב אחד ונסו שוב.</div>';
-    }
+    if (panel) panel.innerHTML = '<div style="padding:24px;font-weight:800">לא הצלחנו לטעון את מפת הגג. חזרו שלב אחד ונסו שוב.</div>';
   } finally {
     installing = false;
   }
