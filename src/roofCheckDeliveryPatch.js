@@ -1,5 +1,4 @@
 import './lib/govMapAutocompleteBridge.js';
-import './roofGovMapSelectionBridge.js';
 
 function blockDirectPdfOpening(event) {
   const pdfTrigger = event.target?.closest?.('[data-action="generatePdf"]');
