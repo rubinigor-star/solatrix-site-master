@@ -3,7 +3,7 @@ const PROJ4_SCRIPT = 'https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js';
 const GOVMAP_TOKEN = String(import.meta.env.VITE_GOVMAP_API_TOKEN || '').trim();
 const GEOMETRY_KEY = 'solatrix_roof_geometry_v1';
 const MAP_ID = 'solatrix-obstacles-govmap';
-const STYLE_ID = 'solatrix-obstacles-govmap-style-v3';
+const STYLE_ID = 'solatrix-obstacles-govmap-style-v4';
 const LIFECYCLE_FLAG = '__solatrixGovMapLifecycleV1';
 
 let installing = false;
@@ -112,24 +112,38 @@ function savedRoofShape(latlngs, geometry) {
   return { wkt: null, center: null };
 }
 
-function renderSavedRoof(shape, { focus = true } = {}) {
-  if (!shape?.center || typeof window.govmap !== 'object') return;
+function renderSavedRoof(shape, { focus = false, clearExisting = false } = {}) {
+  if (!shape?.center || typeof window.govmap !== 'object') return false;
   if (focus) {
     try {
       window.govmap?.setBackground?.(1);
       window.govmap?.zoomToXY?.({ x: shape.center.x, y: shape.center.y, level: 12, marker: false });
     } catch {}
   }
-  if (!shape.wkt) return;
+  if (!shape.wkt || typeof window.govmap?.displayGeometries !== 'function') return false;
   try {
-    window.govmap?.displayGeometries?.({
+    window.govmap.displayGeometries({
       wkts: [shape.wkt],
       names: ['solatrix-marked-roof-obstacles'],
       geometryType: window.govmap.drawType?.Polygon ?? 3,
-      defaultSymbol: { fillColor: [18,110,235,0.10], outlineColor: [18,110,235,1], outlineWidth: 2 },
-      clearExisting: true
+      defaultSymbol: { fillColor: [18,110,235,0.14], outlineColor: [18,110,235,1], outlineWidth: 4 },
+      clearExisting
     });
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function scheduleRoofRender(shape, { focusFirst = false } = {}) {
+  const delays = [0, 120, 300, 650, 1100, 1800, 2800];
+  delays.forEach((delay, index) => {
+    window.setTimeout(() => {
+      if (!isObstaclesPage()) return;
+      try { window.dispatchEvent(new Event('resize')); } catch {}
+      renderSavedRoof(shape, { focus: focusFirst && index === 0, clearExisting: index === 0 });
+    }, delay);
+  });
 }
 
 function ensureBadge(wrap) {
@@ -154,11 +168,7 @@ function reuseLiveMap(panel, shape) {
   panel.appendChild(wrap);
   installedPanel = panel;
 
-  window.requestAnimationFrame(() => {
-    window.dispatchEvent(new Event('resize'));
-    renderSavedRoof(shape, { focus: true });
-  });
-  window.setTimeout(() => renderSavedRoof(shape, { focus: false }), 450);
+  window.requestAnimationFrame(() => scheduleRoofRender(shape, { focusFirst: false }));
   return true;
 }
 
@@ -187,8 +197,7 @@ async function createFreshMap(panel, shape) {
     zoomButtons: true
   });
 
-  window.setTimeout(() => renderSavedRoof(shape, { focus: true }), 700);
-  window.setTimeout(() => renderSavedRoof(shape, { focus: false }), 1350);
+  scheduleRoofRender(shape, { focusFirst: true });
 }
 
 async function install() {
