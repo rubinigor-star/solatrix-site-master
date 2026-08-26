@@ -8,6 +8,8 @@ const GEOMETRY_KEY = 'solatrix_roof_geometry_v1';
 const ADDRESS_KEY = 'solatrix_roof_check_address';
 const MAP_ID = 'solatrix-official-govmap';
 const ADDRESS_ZOOM_LEVEL = 11;
+const MAP_STASH_ID = 'solatrix-govmap-live-stash';
+const LIFECYCLE_FLAG = '__solatrixGovMapLifecycleV1';
 
 let installed = false;
 let surfaces = [];
@@ -16,21 +18,41 @@ let lastFocusedAddress = '';
 let currentCenterItm = null;
 let manualPointsItm = [];
 
-function loadScript(src, globalCheck) {
-  return new Promise((resolve, reject) => {
-    if (globalCheck()) return resolve();
-    const existing = document.querySelector(`script[src="${src}"]`);
-    if (existing) {
-      existing.addEventListener('load', resolve, { once: true });
-      existing.addEventListener('error', reject, { once: true });
-      return;
-    }
-    const script = document.createElement('script');
+function loadScript(src, globalCheck, timeoutMs = 10000) {
+  if (globalCheck()) return Promise.resolve();
+
+  let script = document.querySelector(`script[src="${src}"]`);
+  if (!script) {
+    script = document.createElement('script');
     script.src = src;
     script.defer = true;
-    script.onload = resolve;
-    script.onerror = reject;
     document.head.appendChild(script);
+  }
+
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    const startedAt = Date.now();
+
+    const finish = (callback, value) => {
+      if (finished) return;
+      finished = true;
+      window.clearTimeout(timer);
+      script.removeEventListener('error', onError);
+      callback(value);
+    };
+
+    const onError = () => finish(reject, new Error(`Failed to load ${src}`));
+    const probe = () => {
+      if (finished) return;
+      if (globalCheck()) return finish(resolve);
+      if (Date.now() - startedAt >= timeoutMs) {
+        return finish(reject, new Error(`Timed out waiting for ${src}`));
+      }
+      timer = window.setTimeout(probe, 80);
+    };
+
+    let timer = window.setTimeout(probe, 0);
+    script.addEventListener('error', onError, { once: true });
   });
 }
 
@@ -38,6 +60,67 @@ function getAddress() {
   const inputValue = document.querySelector('[data-field="address"]')?.value?.trim();
   if (inputValue) return inputValue;
   try { return localStorage.getItem(ADDRESS_KEY)?.trim() || ''; } catch { return ''; }
+}
+
+function ensureMapStash() {
+  let stash = document.getElementById(MAP_STASH_ID);
+  if (stash) return stash;
+  stash = document.createElement('div');
+  stash.id = MAP_STASH_ID;
+  stash.setAttribute('aria-hidden', 'true');
+  stash.style.cssText = 'position:fixed;left:-200vw;top:0;width:min(100vw,900px);height:560px;overflow:hidden;visibility:hidden;pointer-events:none;z-index:-1;';
+  document.body.appendChild(stash);
+  return stash;
+}
+
+function preserveLiveGovMap() {
+  const wrap = document.querySelector('.solatrixGovMapWrap');
+  if (!wrap || wrap.closest(`#${MAP_STASH_ID}`)) return false;
+  ensureMapStash().appendChild(wrap);
+  return true;
+}
+
+function takeLiveGovMap() {
+  const stash = document.getElementById(MAP_STASH_ID);
+  const wrap = stash?.querySelector('.solatrixGovMapWrap') || null;
+  if (wrap) wrap.remove();
+  if (stash && !stash.childElementCount) stash.remove();
+  return wrap;
+}
+
+function installMapLifecycleBridge() {
+  if (window[LIFECYCLE_FLAG]) return;
+
+  const previousPushState = window.history.pushState.bind(window.history);
+  const previousReplaceState = window.history.replaceState.bind(window.history);
+  const shouldPreserveForUrl = (url) => {
+    if (url == null) return false;
+    const wrap = document.querySelector('.solatrixGovMapWrap');
+    if (!wrap || wrap.closest(`#${MAP_STASH_ID}`)) return false;
+    try {
+      const target = new URL(String(url), window.location.href);
+      return target.pathname !== window.location.pathname;
+    } catch {
+      return true;
+    }
+  };
+
+  window.history.pushState = function solatrixGovMapPushState(state, title, url) {
+    if (shouldPreserveForUrl(url)) preserveLiveGovMap();
+    return previousPushState(state, title, url);
+  };
+
+  window.history.replaceState = function solatrixGovMapReplaceState(state, title, url) {
+    if (shouldPreserveForUrl(url)) preserveLiveGovMap();
+    return previousReplaceState(state, title, url);
+  };
+
+  window.addEventListener('popstate', () => preserveLiveGovMap(), true);
+  window[LIFECYCLE_FLAG] = {
+    preserve: preserveLiveGovMap,
+    take: takeLiveGovMap,
+    peek: () => document.querySelector(`#${MAP_STASH_ID} .solatrixGovMapWrap`) || document.querySelector('.solatrixGovMapWrap') || null
+  };
 }
 
 function defineProjections() {
@@ -230,14 +313,21 @@ function publish() {
 }
 
 function restore() {
+  let restored = false;
   try {
     const saved = JSON.parse(localStorage.getItem(GEOMETRY_KEY) || 'null');
     if (saved?.geometry?.provider === 'govmap-official' && saved.geometry?.address === getAddress() && Array.isArray(saved.surfaces)) {
       surfaces = saved.surfaces;
       const points = saved.surfaces[0]?.latlngs || [];
       manualPointsItm = points.map((point) => wgs84ToItm(point.lng, point.lat));
+      restored = true;
     }
   } catch {}
+  if (!restored) {
+    surfaces = [];
+    manualPointsItm = [];
+  }
+  return restored;
 }
 
 function renderSummary() {
@@ -362,9 +452,48 @@ function injectStyles() {
     .solatrixGovMapHint.success{background:rgba(232,251,242,.96);color:#16734a}
     .solatrixGovMapSurfaceList{position:absolute;z-index:20;left:16px;top:16px;display:grid;gap:8px}
     .solatrixGovMapSurfaceList div{border-radius:16px;background:rgba(255,255,255,.95);padding:10px 12px;font-weight:900;box-shadow:0 10px 22px rgba(0,0,0,.14)}
+    .solatrixGovMapWrap.isObstaclesStep .solatrixGovMapToolbar,
+    .solatrixGovMapWrap.isObstaclesStep .solatrixGovMapCrosshair,
+    .solatrixGovMapWrap.isObstaclesStep .solatrixGovMapMobileCounter,
+    .solatrixGovMapWrap.isObstaclesStep .solatrixGovMapSurfaceList,
+    .solatrixGovMapWrap.isObstaclesStep .solatrixGovMapHint{display:none!important}
     @media(max-width:760px){.solatrixGovMapWrap{height:520px;border-radius:24px}.solatrixGovMapToolbar{display:none!important}.solatrixGovMapHint{right:10px;left:10px;bottom:10px}.solatrixGovMapSurfaceList{left:10px;top:auto;bottom:100px}}
   `;
   document.head.appendChild(style);
+}
+
+function preparePanel(panel) {
+  panel.dataset.govmapInstalled = 'true';
+  panel.dataset.mapProvider = 'govmap-official';
+  panel.classList.add('solatrixMapInjected');
+  panel.removeAttribute('data-action');
+}
+
+function reattachLiveMap(panel) {
+  const wrap = takeLiveGovMap();
+  if (!wrap || !wrap.querySelector(`#${MAP_ID}`)) return false;
+
+  preparePanel(panel);
+  panel.innerHTML = '';
+  wrap.classList.remove('isObstaclesStep');
+  wrap.querySelectorAll('.solatrixObstaclesGovMapBadge').forEach((node) => node.remove());
+  panel.appendChild(wrap);
+  restore();
+  installManualApi();
+  renderSummary();
+
+  window.requestAnimationFrame(() => {
+    window.dispatchEvent(new Event('resize'));
+    try { window.govmap?.setBackground?.(1); } catch {}
+    renderManualGeometry();
+    const address = getAddress();
+    if (address && address !== lastFocusedAddress) {
+      focusEnteredAddress(true).then(() => window.setTimeout(renderManualGeometry, 350)).catch((error) => {
+        console.error('GovMap address refocus failed', error);
+      });
+    }
+  });
+  return true;
 }
 
 async function install() {
@@ -372,9 +501,11 @@ async function install() {
   const panel = document.querySelector('.mapPanel.interactiveMap');
   if (!panel) return;
   installed = true;
-  panel.dataset.govmapInstalled = 'true';
-  panel.dataset.mapProvider = 'govmap-official';
   injectStyles();
+
+  if (reattachLiveMap(panel)) return;
+
+  preparePanel(panel);
   restore();
   installManualApi();
   if (!GOVMAP_TOKEN) {
@@ -385,8 +516,6 @@ async function install() {
     loadScript(GOVMAP_SCRIPT, () => Boolean(window.govmap?.createMap)),
     loadScript(PROJ4_SCRIPT, () => Boolean(window.proj4))
   ]);
-  panel.classList.add('solatrixMapInjected');
-  panel.removeAttribute('data-action');
   panel.innerHTML = `<div class="solatrixGovMapWrap"><div id="${MAP_ID}"></div><div class="solatrixGovMapToolbar"><button class="primary" data-govmap-official="draw">סימון גג</button><button class="danger" data-govmap-official="clear">נקה הכל</button></div><div class="solatrixGovMapSurfaceList"></div><div class="solatrixGovMapHint">טוענים את תצלום האוויר הרשמי של GovMap…</div></div>`;
   panel.querySelector('[data-govmap-official="draw"]')?.addEventListener('click', startDraw);
   panel.querySelector('[data-govmap-official="clear"]')?.addEventListener('click', clearAll);
@@ -410,7 +539,7 @@ async function install() {
       console.error('GovMap address focus failed', error);
       setHint('תצלום האוויר של GovMap נטען, אך לא הצלחנו להתמקד בכתובת. בדקו את הכתובת ונסו שוב.');
     });
-  }, 1400);
+  }, 1200);
 }
 
 function tick() {
@@ -421,8 +550,10 @@ function tick() {
   install().catch((error) => {
     installed = false;
     console.error('Official GovMap installation failed', error);
+    setHint('המפה לא נטענה כראוי. נסו לרענן את הדף או לחזור לכתובת ולנסות שוב.');
   });
 }
 
+installMapLifecycleBridge();
 setInterval(tick, 500);
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick); else tick();

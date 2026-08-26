@@ -1,0 +1,56 @@
+name: Publish address-map preview assets
+
+on:
+  push:
+    branches:
+      - 'preview/address-map-adaptation'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build preview
+        env:
+          VITE_GOVMAP_API_TOKEN: ${{ secrets.VITE_GOVMAP_API_TOKEN }}
+        run: npm run build
+
+      - name: Create stable preview asset alias
+        run: |
+          set -euo pipefail
+          asset_name="$(grep -oE '../assets/roofCheckApp-[A-Za-z0-9_-]+\.js' dist/roof-check/index.html | head -n 1 | sed 's#../assets/##')"
+          test -n "$asset_name"
+          test -f "dist/assets/$asset_name"
+          cp "dist/assets/$asset_name" dist/assets/roofCheckApp-BPl-PbOm.js
+
+      - name: Publish static preview branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/solatrix-address-map-static
+          mkdir -p /tmp/solatrix-address-map-static
+          cp -R dist/. /tmp/solatrix-address-map-static/
+          cd /tmp/solatrix-address-map-static
+          git init
+          git checkout -b preview-address-map-static
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          touch .nojekyll
+          git add -A
+          git commit -m "Publish address-map preview ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin preview-address-map-static

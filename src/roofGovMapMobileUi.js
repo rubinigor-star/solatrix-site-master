@@ -1,5 +1,6 @@
-const FLAG = '__solatrixGovMapMobileUiV8';
-const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v8';
+const FLAG = '__solatrixGovMapMobileUiV9';
+const STYLE_ID = 'solatrix-govmap-mobile-ui-style-v9';
+const LIFECYCLE_FLAG = '__solatrixGovMapLifecycleV1';
 
 let initialMapRevealDone = false;
 
@@ -9,6 +10,14 @@ function isRoofMarkingPage() {
 
 function isMobile() {
   return window.matchMedia('(max-width: 820px)').matches;
+}
+
+function obstaclesPath() {
+  const pathname = window.location.pathname || '';
+  const marker = '/roof-marking';
+  const index = pathname.lastIndexOf(marker);
+  if (index >= 0) return `${pathname.slice(0, index)}/obstacles`;
+  return '/roof-check/obstacles';
 }
 
 function injectStyles() {
@@ -114,6 +123,8 @@ function cleanupMobileUi() {
 
 function navigateToObstacles() {
   const next = document.querySelector('.nextTextBtn[data-action="next"]');
+  window[LIFECYCLE_FLAG]?.preserve?.();
+
   if (next) {
     next.removeAttribute('disabled');
     next.click();
@@ -122,7 +133,7 @@ function navigateToObstacles() {
   window.setTimeout(() => {
     if (!isRoofMarkingPage()) return;
     cleanupMobileUi();
-    window.history.pushState({ step: 4 }, '', '/obstacles');
+    window.history.pushState({ step: 4 }, '', obstaclesPath());
     window.dispatchEvent(new PopStateEvent('popstate', { state: { step: 4 } }));
   }, 120);
 }

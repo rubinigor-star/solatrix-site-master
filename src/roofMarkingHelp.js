@@ -1,7 +1,5 @@
-import helpImageBase64 from './assets/roof-marking-help.webp.b64?raw';
-
-const FLAG = '__solatrixRoofMarkingHelpInstalledV1';
-const STYLE_ID = 'solatrix-roof-marking-help-style';
+const FLAG = '__solatrixRoofMarkingHelpInstalledV2';
+const STYLE_ID = 'solatrix-roof-marking-help-style-v2';
 const SEEN_KEY = 'solatrix_roof_marking_help_seen_v1';
 
 function isRoofMarkingPage() {
@@ -22,7 +20,16 @@ function injectStyles() {
     .roofHelpHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
     .roofHelpHeader h3{margin:0;color:#09243f;font-size:25px;line-height:1.15}
     .roofHelpClose{width:42px;height:42px;border:0;border-radius:50%;background:#f2f5f8;color:#17334f;font-size:26px;cursor:pointer}
-    .roofHelpImage{display:block;width:100%;height:auto;border-radius:20px;border:1px solid rgba(10,39,70,.1);background:#f7f9fb}
+    .roofHelpDemo{position:relative;width:100%;aspect-ratio:16/10;border-radius:20px;border:1px solid rgba(10,39,70,.1);overflow:hidden;background:linear-gradient(135deg,#dce9ef,#c7d6de)}
+    .roofHelpDemo:before{content:"";position:absolute;inset:0;background:linear-gradient(28deg,transparent 0 35%,rgba(255,255,255,.28) 35% 38%,transparent 38% 100%),linear-gradient(120deg,rgba(57,99,77,.17),transparent 40%),repeating-linear-gradient(90deg,rgba(80,110,125,.07) 0 1px,transparent 1px 22px)}
+    .roofHelpRoof{position:absolute;left:22%;top:18%;width:56%;height:58%;transform:rotate(-8deg);background:#667782;border:4px solid rgba(255,255,255,.9);box-shadow:0 14px 30px rgba(10,30,45,.18);clip-path:polygon(7% 12%,90% 4%,98% 80%,14% 96%)}
+    .roofHelpPolygon{position:absolute;left:29%;top:27%;width:44%;height:42%;transform:rotate(-8deg);border:3px solid #126eeb;background:rgba(18,110,235,.12);clip-path:polygon(8% 8%,92% 0,100% 78%,12% 100%)}
+    .roofHelpPoint{position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;border:5px solid #126eeb;box-shadow:0 3px 9px rgba(0,0,0,.2)}
+    .roofHelpPoint.p1{left:29%;top:27%}.roofHelpPoint.p2{right:27%;top:24%}.roofHelpPoint.p3{right:24%;bottom:28%}.roofHelpPoint.p4{left:31%;bottom:25%}
+    .roofHelpCrosshair{position:absolute;left:50%;top:50%;width:58px;height:58px;transform:translate(-50%,-50%);border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 2px #126eeb}
+    .roofHelpCrosshair:before,.roofHelpCrosshair:after{content:"";position:absolute;left:50%;top:50%;background:#126eeb;transform:translate(-50%,-50%)}
+    .roofHelpCrosshair:before{width:74px;height:2px}.roofHelpCrosshair:after{width:2px;height:74px}
+    .roofHelpDemoLabel{position:absolute;right:14px;bottom:14px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.95);color:#17334f;font-size:13px;font-weight:900;box-shadow:0 6px 16px rgba(0,0,0,.14)}
     .roofHelpSteps{display:grid;gap:10px;margin:16px 0 14px;padding:0;list-style:none}
     .roofHelpSteps li{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;text-align:right;color:#17334f;font-size:16px;font-weight:700;line-height:1.35}
     .roofHelpSteps b{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#eaf3ff;color:#1670dc;font-size:16px}
@@ -35,13 +42,12 @@ function injectStyles() {
       .roofHelpDialog{width:100%;max-height:94vh;border-radius:26px 26px 18px 18px;padding:14px}
       .roofHelpHeader h3{font-size:22px}
       .roofHelpSteps li{font-size:15px}
+      .roofHelpPoint{width:15px;height:15px;border-width:4px}
+      .roofHelpCrosshair{width:50px;height:50px}
+      .roofHelpCrosshair:before{width:64px}.roofHelpCrosshair:after{height:64px}
     }
   `;
   document.head.appendChild(style);
-}
-
-function imageSrc() {
-  return `data:image/webp;base64,${helpImageBase64.trim()}`;
 }
 
 function ensureModal() {
@@ -57,7 +63,13 @@ function ensureModal() {
         <h3 id="roofHelpTitle">איך מסמנים את הגג?</h3>
         <button class="roofHelpClose" type="button" aria-label="סגירה">×</button>
       </div>
-      <img class="roofHelpImage" src="${imageSrc()}" alt="הדגמה של סימון פינות הגג בעזרת הכוונת" />
+      <div class="roofHelpDemo" aria-hidden="true">
+        <div class="roofHelpRoof"></div>
+        <div class="roofHelpPolygon"></div>
+        <span class="roofHelpPoint p1"></span><span class="roofHelpPoint p2"></span><span class="roofHelpPoint p3"></span><span class="roofHelpPoint p4"></span>
+        <div class="roofHelpCrosshair"></div>
+        <div class="roofHelpDemoLabel">כוונת במרכז + נקודה בכל פינה</div>
+      </div>
       <ol class="roofHelpSteps">
         <li><b>1</b><span>הזיזו את המפה עד שפינת הגג נמצאת בדיוק מתחת לכוונת.</span></li>
         <li><b>2</b><span>לחצו על <strong>הוסף נקודה</strong> והמשיכו לפינה הבאה.</span></li>
