@@ -31,9 +31,10 @@ jobs:
       - name: Create stable preview asset alias
         run: |
           set -euo pipefail
-          latest_asset="$(find dist/assets -maxdepth 1 -type f -name 'roofCheckApp-*.js' | head -n 1)"
-          test -n "$latest_asset"
-          cp "$latest_asset" dist/assets/roofCheckApp-BPl-PbOm.js
+          asset_name="$(grep -oE '../assets/roofCheckApp-[A-Za-z0-9_-]+\.js' dist/roof-check/index.html | head -n 1 | sed 's#../assets/##')"
+          test -n "$asset_name"
+          test -f "dist/assets/$asset_name"
+          cp "dist/assets/$asset_name" dist/assets/roofCheckApp-BPl-PbOm.js
 
       - name: Publish static preview branch
         env:
