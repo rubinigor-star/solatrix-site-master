@@ -14,7 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout preview branch
         uses: actions/checkout@v4
 
       - name: Setup Node
@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build site
+      - name: Build preview branch
         env:
           VITE_GOVMAP_API_TOKEN: ${{ secrets.VITE_GOVMAP_API_TOKEN }}
         run: npm run build
@@ -43,5 +43,33 @@ jobs:
         with:
           name: address-map-preview-dist
           path: dist
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Checkout production baseline
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: production-baseline
+
+      - name: Install production baseline dependencies
+        if: github.event_name == 'pull_request'
+        working-directory: production-baseline
+        run: npm install
+
+      - name: Build production baseline without deploying
+        if: github.event_name == 'pull_request'
+        working-directory: production-baseline
+        env:
+          VITE_GOVMAP_API_TOKEN: ${{ secrets.VITE_GOVMAP_API_TOKEN }}
+        run: npm run build
+
+      - name: Upload production baseline build
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: address-map-production-baseline
+          path: production-baseline/dist
           if-no-files-found: error
           retention-days: 7
