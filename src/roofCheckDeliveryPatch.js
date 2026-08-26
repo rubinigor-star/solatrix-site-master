@@ -1,3 +1,4 @@
+import './lib/govMapAutocompleteBridge.js';
 import './roofGovMapSelectionBridge.js';
 
 function blockDirectPdfOpening(event) {
