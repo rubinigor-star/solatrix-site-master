@@ -24,7 +24,16 @@ jobs:
         run: npm install
 
       - name: Build preview
+        env:
+          VITE_GOVMAP_API_TOKEN: ${{ secrets.VITE_GOVMAP_API_TOKEN }}
         run: npm run build
+
+      - name: Create stable preview asset alias
+        run: |
+          set -euo pipefail
+          latest_asset="$(find dist/assets -maxdepth 1 -type f -name 'roofCheckApp-*.js' | head -n 1)"
+          test -n "$latest_asset"
+          cp "$latest_asset" dist/assets/roofCheckApp-BPl-PbOm.js
 
       - name: Publish static preview branch
         env:
